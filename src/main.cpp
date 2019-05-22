@@ -35,13 +35,9 @@ int main(int argc, char *argv[])
 			double r = V.norm();
 			
 			double res = 1.0 - r/(l);
-			
-			//std::cout << "\nres 1 = " << res << std::endl;
-			
+
 			res = (res + fabs(res)) * 1.5 / (l * l * 3.141592653589793238);
-			
-			//std::cout << "\nres 2 = " << res << std::endl;
-			
+
 			return res;
 			});
  	}

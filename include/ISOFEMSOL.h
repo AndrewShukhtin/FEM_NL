@@ -52,7 +52,7 @@ private:
 	
 	double p1, p2;             // параметры вклада локальных и нелокальных эффектов
 	
-	double R;
+	double R;                  // радиус влияния 
 	
 	int NumberOfNodes, NumberOfElements, NodesPerElement, UxBoundNumber, 
 		UyBoundNumber, UxUyBoundNumber, LoadBoundNumber;
