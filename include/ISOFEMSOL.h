@@ -32,7 +32,6 @@ public:
 private:
 	
 	Eigen::SparseMatrix<double> K;
-	std::vector<Triplet> TripletList;
 	Eigen::MatrixXd	Ke,        // матирца жесткости элемента
 					BT,        // оператор связи деформаций и перемещений (транспонированный)
 					B;
@@ -61,9 +60,9 @@ private:
 	
 	void ConstructRightPart(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load);
 
-	void ConstructStiffMatr();
+	void ConstructStiffMatr(std::vector<Triplet> &TripletList);
 	
-	void ConstructStiffMatr(std::function<double(const double &, const double &)> phi);
+	void ConstructStiffMatr(std::vector<Triplet> &TripletList, std::function<double(const double &, const double &)> phi);
 	
 	void ApplyingConstraints();
 	
@@ -73,7 +72,7 @@ private:
 	
  	inline void ComputeKe(const int &NumberOfQP, const Eigen::RowVectorXd &Weights, const Eigen::MatrixXd &ElementNodesCoord, const std::vector<Eigen::MatrixXd> &NGradArr, Eigen::MatrixXd &Ndx);
 	
-	inline void AddKeToTriplet(const Eigen::RowVectorXi &ElementNodesNumbers);
+	inline void AddKeToTriplet(std::vector<Triplet> &TripletList, const std::vector<int> &IdX);
 	
 	void ComputeStrains();
 	
