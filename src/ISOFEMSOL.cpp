@@ -39,7 +39,7 @@ ISOFEMSOL::ISOFEMSOL(std::string _filename, double _p1 = 1.0): p1(_p1)
 };
 
 
-ISOFEMSOL::ISOFEMSOL(std::string _filename, double _p1, double _R):p1(_p1), R(_R)
+ISOFEMSOL::ISOFEMSOL(std::string _filename, double _p1, double _R):p1(_p1), L(_R)
 {
 	MESH.ReadMesh(_filename);
 	
@@ -157,7 +157,7 @@ void ISOFEMSOL::Static_Analysis(std::function<Eigen::Vector2d(Eigen::RowVector2d
 };
 
 void ISOFEMSOL::NonLocal_Static_Analysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load, 
-		std::function<double(Eigen::RowVector2d&, Eigen::RowVector2d&, const double &)> phi)
+		std::function<double(const double &, const double &)> phi)
 {
 	auto T1 = std::chrono::high_resolution_clock::now();
 	
@@ -237,7 +237,7 @@ void ISOFEMSOL::NonLocal_Static_Analysis(std::function<Eigen::Vector2d(Eigen::Ro
 
 
 
-void ISOFEMSOL::ConstructStiffMatr(std::function<double(Eigen::RowVector2d&, Eigen::RowVector2d&, const double &)> phi)
+void ISOFEMSOL::ConstructStiffMatr(std::function<double(const double &, const double &)> phi)
 {
 	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
 	
@@ -272,14 +272,16 @@ void ISOFEMSOL::ConstructStiffMatr(std::function<double(Eigen::RowVector2d&, Eig
 	
 	B = Eigen::MatrixXd::Zero(3, NodesPerElement * 2);
 	
-	NaiveRnnSearch(RnnArr,R);
+	NaiveRnnSearch(RnnArr,L);
 	
 	TripletList.reserve(4 * NumberOfNodes * NumberOfNodes);
 	
 	Eigen::MatrixXd ElementNodesCoordi(NodesPerElement, 2);
 	Eigen::MatrixXd ElementNodesCoordj(NodesPerElement, 2);
 	
-	Eigen::RowVector2d X, Y;
+	Eigen::RowVector2d X, Y, R;
+	
+	double r = 0.0;
 	
 	const auto &Nodes = MESH.Nodes();
 	const auto &Elements = MESH.Elements();
@@ -294,8 +296,6 @@ void ISOFEMSOL::ConstructStiffMatr(std::function<double(Eigen::RowVector2d&, Eig
 
 	for(int ei = 0; ei < NumberOfElements; ++ei)
 	{
-		
-		
 		
 		ElementNodesNumbersi = Elements.row(ei);
 		
@@ -364,7 +364,11 @@ void ISOFEMSOL::ConstructStiffMatr(std::function<double(Eigen::RowVector2d&, Eig
 					
 					Y = Narr[j] * ElementNodesCoordj;
 					
-					Ke += Weights(i) * Weights(j) * BT * D * B * phi(X,Y,R) *  Jmatri.determinant() * Jmatrj.determinant();
+					R = X - Y;
+					
+					r = R.norm();
+					
+					Ke += Weights(i) * Weights(j) * BT * D * B * phi(r,L) *  Jmatri.determinant() * Jmatrj.determinant();
 				}
 			}	
 			
@@ -391,7 +395,7 @@ void ISOFEMSOL::ConstructStiffMatr(std::function<double(Eigen::RowVector2d&, Eig
 }
 
 
-void ISOFEMSOL::NaiveRnnSearch(std::vector<std::vector<int>> &RnnArr, const double &R)
+void ISOFEMSOL::NaiveRnnSearch(std::vector<std::vector<int>> &RnnArr, const double &L)
 {
 	const auto &Elements = MESH.Elements();
 	const auto &Nodes = MESH.Nodes();
@@ -426,7 +430,7 @@ void ISOFEMSOL::NaiveRnnSearch(std::vector<std::vector<int>> &RnnArr, const doub
 		{
 			distV = COE.row(ei) - COE.row(ej);
 			dist = distV.norm();
-			if (dist <= R)
+			if (dist <= L)
 				RnnArr[ei].push_back(ej);
 		}
 		RnnArr[ei].shrink_to_fit();
@@ -1000,7 +1004,7 @@ void ISOFEMSOL::ComputeStress()
 }
 
 
-void ISOFEMSOL::ComputeStress(std::function<double(Eigen::RowVector2d&, Eigen::RowVector2d&, const double &)> phi)
+void ISOFEMSOL::ComputeStress(std::function<double(const double&, const double &)> phi)
 {
 	SigmaXX.resize(NumberOfNodes); SigmaYY.resize(NumberOfNodes); SigmaXY.resize(NumberOfNodes);
 	
@@ -1063,7 +1067,9 @@ void ISOFEMSOL::ComputeStress(std::function<double(Eigen::RowVector2d&, Eigen::R
 	Eigen::MatrixXd ElementNodesCoordi(NodesPerElement, 2);
 	Eigen::MatrixXd ElementNodesCoordj(NodesPerElement, 2);
 	
-	Eigen::RowVector2d X, Y;
+	Eigen::RowVector2d X, Y, R;
+	
+	double r;
 	
 	const auto &Nodes = MESH.Nodes();
 	const auto &Elements = MESH.Elements();
@@ -1154,13 +1160,17 @@ void ISOFEMSOL::ComputeStress(std::function<double(Eigen::RowVector2d&, Eigen::R
 						
 						Y = Narr[q] * ElementNodesCoordj;
 						
+						R = X - Y;
+						
+						r = R.norm();
+						
 						Epsi(0) = Narr[q] * EpsiXX_Element;
 						Epsi(1) = Narr[q] * EpsiYY_Element;
 						Epsi(2) = Narr[q] * EpsiXY_Element;
 						
 						Jmatr = NGradArr[q] * ElementNodesCoordj;
 						
-						Sigma = Weights(q) * phi(X,Y,R) * D * Epsi * Jmatr.determinant();
+						Sigma = Weights(q) * phi(r,L) * D * Epsi * Jmatr.determinant();
 						
 						SigmaXX_QP(q) = Sigma(0);
 						SigmaYY_QP(q) = Sigma(1);
@@ -1176,13 +1186,17 @@ void ISOFEMSOL::ComputeStress(std::function<double(Eigen::RowVector2d&, Eigen::R
 						
 						Y = Narr[q] * ElementNodesCoordj;
 						
+						R = X - Y;
+						
+						r = R.norm();						
+						
 						Epsi(0) = Narr[q] * EpsiXX_Element;
 						Epsi(1) = Narr[q] * EpsiYY_Element;
 						Epsi(2) = Narr[q] * EpsiXY_Element;
 						
 						Jmatr = NGradArr[q] * ElementNodesCoordj;
 						
-						Sigma =  Weights(q) * phi(X,Y,R) * D * Epsi * Jmatr.determinant();
+						Sigma =  Weights(q) * phi(r,L) * D * Epsi * Jmatr.determinant();
 						
 						SigmaXX_QP(q) = Sigma(0);
 						SigmaYY_QP(q) = Sigma(1);
@@ -1195,13 +1209,17 @@ void ISOFEMSOL::ComputeStress(std::function<double(Eigen::RowVector2d&, Eigen::R
 						
 						Y = Narr[q] * ElementNodesCoordj;
 						
+						R = X - Y;
+						
+						r = R.norm();
+						
 						Epsi(0) = Narr[q] * EpsiXX_Element;
 						Epsi(1) = Narr[q] * EpsiYY_Element;
 						Epsi(2) = Narr[q] * EpsiXY_Element;
 						
 						Jmatr = NGradArr[q] * ElementNodesCoordj;
 						
-						Sigma =  Weights(q) * phi(X,Y,R) * D * Epsi * Jmatr.determinant();
+						Sigma =  Weights(q) * phi(r,L) * D * Epsi * Jmatr.determinant();
 						
 						SigmaXX_QP(q - 1) = Sigma(0);
 						SigmaYY_QP(q - 1) = Sigma(1);

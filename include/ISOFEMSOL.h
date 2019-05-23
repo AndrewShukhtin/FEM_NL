@@ -27,7 +27,7 @@ public:
 	void Static_Analysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load);
 	
 	void NonLocal_Static_Analysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load, 
-						std::function<double(Eigen::RowVector2d&, Eigen::RowVector2d&, const double &)> phi);
+						std::function<double(const double &, const double &)> phi);
 	
 private:
 	
@@ -52,7 +52,7 @@ private:
 	
 	double p1, p2;             // параметры вклада локальных и нелокальных эффектов
 	
-	double R;                  // радиус влияния 
+	double L;                  // радиус влияния 
 	
 	int NumberOfNodes, NumberOfElements, NodesPerElement, UxBoundNumber, 
 		UyBoundNumber, UxUyBoundNumber, LoadBoundNumber;
@@ -63,7 +63,7 @@ private:
 
 	void ConstructStiffMatr();
 	
-	void ConstructStiffMatr(std::function<double(Eigen::RowVector2d&, Eigen::RowVector2d&, const double &)> phi);
+	void ConstructStiffMatr(std::function<double(const double &, const double &)> phi);
 	
 	void ApplyingConstraints();
 	
@@ -79,11 +79,11 @@ private:
 	
 	void ComputeStress();
 	
-	void ComputeStress(std::function<double(Eigen::RowVector2d&, Eigen::RowVector2d&, const double &)> phi);
+	void ComputeStress(std::function<double(const double &, const double &)> phi);
 	
 	std::map<int, int> Counter(const Eigen::MatrixXi &);
 	
-	void NaiveRnnSearch(std::vector<std::vector<int>> &RnnArr, const double &R);
+	void NaiveRnnSearch(std::vector<std::vector<int>> &RnnArr, const double &L);
 	
 	void WriteToVTK(std::string _filename);
 	
