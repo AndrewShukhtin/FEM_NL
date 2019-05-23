@@ -10,12 +10,6 @@ int main(int argc, char *argv[])
 {
 	assert(argc > 1);
 	
-	unsigned N = std::stoi(argv[2]);
-	
-	double p1 = std::stod(argv[3]);
-	
-	double L = std::stod(argv[4]);
-	
 	const auto Load = [](Eigen::RowVector2d &X)->Eigen::Vector2d 
 	{
 		Eigen::Vector2d V; 
@@ -33,6 +27,11 @@ int main(int argc, char *argv[])
 	
 	if(argc > 2)
 	{
+		unsigned N = std::stoi(argv[2]);
+	
+		double p1 = std::stod(argv[3]);
+	
+		double L = std::stod(argv[4]);
 		
 		const auto phi1 =[](const double &r, const double &L)->double 
 		{
