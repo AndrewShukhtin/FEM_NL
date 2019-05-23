@@ -170,7 +170,7 @@ void ISOFEMSOL::NonLocal_Static_Analysis(std::function<Eigen::Vector2d(Eigen::Ro
 	
 	t1 = std::chrono::high_resolution_clock::now();		  
 	ConstructStiffMatr();
-	if (p1!=1.0)
+	
 	ConstructStiffMatr(phi);
 	t2 = std::chrono::high_resolution_clock::now();
 	std::cout << "ConstructStiffMatr time = "
@@ -274,7 +274,7 @@ void ISOFEMSOL::ConstructStiffMatr(std::function<double(const double &, const do
 	
 	NaiveRnnSearch(RnnArr,L);
 	
-	TripletList.reserve(4 * NumberOfNodes * NumberOfNodes);
+	//TripletList.reserve(4 * NumberOfNodes * NumberOfNodes);
 	
 	Eigen::MatrixXd ElementNodesCoordi(NodesPerElement, 2);
 	Eigen::MatrixXd ElementNodesCoordj(NodesPerElement, 2);
@@ -308,7 +308,6 @@ void ISOFEMSOL::ConstructStiffMatr(std::function<double(const double &, const do
 		
 		for(int ej = 0; ej < RnnArr[ei].size(); ++ej)
 		{	
-			
 			Ke = Eigen::MatrixXd::Zero(NodesPerElement * 2,NodesPerElement * 2);
 			
 			int Ej = RnnArr[ei][ej];
@@ -430,7 +429,8 @@ void ISOFEMSOL::NaiveRnnSearch(std::vector<std::vector<int>> &RnnArr, const doub
 		{
 			distV = COE.row(ei) - COE.row(ej);
 			dist = distV.norm();
-			if (dist <= L)
+			
+			if (dist <= 1.05 * L)
 				RnnArr[ei].push_back(ej);
 		}
 		RnnArr[ei].shrink_to_fit();
