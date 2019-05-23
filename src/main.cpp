@@ -19,6 +19,7 @@ int main(int argc, char *argv[])
 		
 	};
 	
+	if (argc == 2)
 	{
 		ISOFEMSOL Task(argv[1], 1.0);	
 	
@@ -35,9 +36,10 @@ int main(int argc, char *argv[])
 		
 		const auto phi1 =[](const double &r, const double &L)->double 
 		{
-			double res = r*r/(L * L);
+			double l = 0.8 * L;
+			double res = r*r/(l * l);
 
-			res = exp(-res) / (L * L * M_PI);
+			res = exp(-res) / (l * l * M_PI);
 
 			return res;
 		};
