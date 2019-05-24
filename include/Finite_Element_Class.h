@@ -10,9 +10,11 @@ namespace FINITE_ELEMENT
 	{
 	public:
 		
-		FiniteElement(unsigned const Npe): Npe(Npe) {};
+		FiniteElement(unsigned const Npe,unsigned const Dim): Npe(Npe), Dim(Dim) {};
 		
 		virtual unsigned const &NodesPerElement() const;	
+		
+		virtual unsigned const &Dimension() const;
 		
 		virtual Eigen::RowVectorXd ShFunc(Eigen::MatrixXd &qp)  = 0;
 		
@@ -20,7 +22,8 @@ namespace FINITE_ELEMENT
 		
 	protected:
 		
-		unsigned const Npe; // Количество узлов на элементе		
+		unsigned const Npe; // Количество узлов на элементе
+		unsigned const Dim; // Размерность элемента
 		
 	};	
 	

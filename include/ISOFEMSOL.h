@@ -17,12 +17,22 @@
 
 using Triplet = Eigen::Triplet<double>;
 
+using NdxArray = std::vector<std::vector<Eigen::MatrixXd>>;
+
+using JArray = std::vector<std::vector<Eigen::Matrix2d>>;
+
+using JacArray = std::vector<std::vector<double>>;
+
+
+
 class ISOFEMSOL
 {
 public:
-	ISOFEMSOL(std::string _filename, double _p1);
+	ISOFEMSOL(std::string _filename);
 	
 	ISOFEMSOL(std::string _filename, double _p1, double R);
+	
+	ISOFEMSOL(std::string _filename, double _p1, double R, int _HighOrder);
 	
 	void Static_Analysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load);
 	
@@ -55,6 +65,8 @@ private:
 	
 	int NumberOfNodes, NumberOfElements, NodesPerElement, UxBoundNumber, 
 		UyBoundNumber, UxUyBoundNumber, LoadBoundNumber;
+		
+	int HighOrder;
 	
 	FINITE_ELEMENT::MESH MESH;
 	
@@ -62,7 +74,9 @@ private:
 
 	void ConstructStiffMatr(std::vector<Triplet> &TripletList);
 	
-	void ConstructStiffMatr(std::vector<Triplet> &TripletList, std::function<double(const double &, const double &)> phi);
+	void ConstructStiffMatr(std::vector<Triplet> &TripletList, NdxArray &NdxArr, JArray &JArr, JacArray &JacArr);
+	
+	void ConstructStiffMatr(std::vector<Triplet> &, const NdxArray &, const JArray &, const JacArray &, std::function<double(const double &, const double &)> phi);
 	
 	void ApplyingConstraints();
 	
@@ -78,7 +92,7 @@ private:
 	
 	void ComputeStress();
 	
-	void ComputeStress(std::function<double(const double &, const double &)> phi);
+	void ComputeStress(const JacArray &, std::function<double(const double &, const double &)>);
 	
 	std::map<int, int> Counter(const Eigen::MatrixXi &);
 	

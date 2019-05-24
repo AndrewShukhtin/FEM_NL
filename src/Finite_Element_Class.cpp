@@ -7,8 +7,10 @@ namespace FINITE_ELEMENT
 	
 	unsigned const &FiniteElement::NodesPerElement() const{ return Npe; }
 	
+	unsigned const &FiniteElement::Dimension() const{ return Dim; }
 	
-	LinearElement::LinearElement(): FiniteElement(2) {};
+	
+	LinearElement::LinearElement(): FiniteElement(2, 1) {};
 	
 	Eigen::RowVectorXd LinearElement::ShFunc(Eigen::MatrixXd &qp)
 	{
@@ -30,7 +32,7 @@ namespace FINITE_ELEMENT
 		return NGradArr;
 	}
 	
-	QuadraticElement::QuadraticElement(): FiniteElement(3) {};
+	QuadraticElement::QuadraticElement(): FiniteElement(3 ,1) {};
 	
 	Eigen::RowVectorXd QuadraticElement::ShFunc(Eigen::MatrixXd &qp)
 	{
@@ -53,7 +55,7 @@ namespace FINITE_ELEMENT
 	}
 
 
-	BilinearElement::BilinearElement(): FiniteElement(4) {};
+	BilinearElement::BilinearElement(): FiniteElement(4, 2) {};
 	
 	Eigen::RowVectorXd BilinearElement::ShFunc(Eigen::MatrixXd &qp) 
 	{
@@ -83,7 +85,7 @@ namespace FINITE_ELEMENT
 	}
 	
 	
-	QuadraticSerendipElement::QuadraticSerendipElement(): FiniteElement(8) {};
+	QuadraticSerendipElement::QuadraticSerendipElement(): FiniteElement(8, 2) {};
 	
 	Eigen::RowVectorXd QuadraticSerendipElement::ShFunc(Eigen::MatrixXd &qp) 
 	{

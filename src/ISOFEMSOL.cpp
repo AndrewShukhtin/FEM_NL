@@ -1,7 +1,7 @@
 #include "ISOFEMSOL.h"
 
 
-ISOFEMSOL::ISOFEMSOL(std::string _filename, double _p1 = 1.0): p1(_p1)
+ISOFEMSOL::ISOFEMSOL(std::string _filename)
 {
 	MESH.ReadMesh(_filename);
 	
@@ -9,11 +9,12 @@ ISOFEMSOL::ISOFEMSOL(std::string _filename, double _p1 = 1.0): p1(_p1)
 	
 	NumberOfNodes = MESH.NumberOfNodes();
 	
+	p1 = 1.0;
 	p2 = 1.0 - p1;
 	
 	auto &Bounds = MESH.Bounds();
 	
-	UxBoundNumber = UyBoundNumber = UxUyBoundNumber = LoadBoundNumber = -1;
+	HighOrder = UxBoundNumber = UyBoundNumber = UxUyBoundNumber = LoadBoundNumber = -1;
 	
 	std::string Ux("Ux");
 	std::string Uy("Uy");	
@@ -53,7 +54,7 @@ ISOFEMSOL::ISOFEMSOL(std::string _filename, double _p1, double _R):p1(_p1), L(_R
 	
 	auto &Bounds = MESH.Bounds();
 	
-	UxBoundNumber = UyBoundNumber = UxUyBoundNumber = LoadBoundNumber = -1;
+	HighOrder = UxBoundNumber = UyBoundNumber = UxUyBoundNumber = LoadBoundNumber = -1;
 	
 	std::string Ux("Ux");
 	std::string Uy("Uy");	
@@ -77,6 +78,42 @@ ISOFEMSOL::ISOFEMSOL(std::string _filename, double _p1, double _R):p1(_p1), L(_R
 	D*=E/(1.0 - nu*nu);	
 }
 
+
+ISOFEMSOL::ISOFEMSOL(std::string _filename, double _p1, double _R, int _HighOrder):p1(_p1), L(_R), HighOrder( _HighOrder)
+{
+	MESH.ReadMesh(_filename);
+	
+	NumberOfElements = MESH.NumberOfElements();
+	
+	NumberOfNodes = MESH.NumberOfNodes();
+	
+	p2 = 1.0 - p1;
+	
+	auto &Bounds = MESH.Bounds();
+	
+	UxBoundNumber = UyBoundNumber = UxUyBoundNumber = LoadBoundNumber = -1;
+	
+	std::string Ux("Ux");
+	std::string Uy("Uy");	
+	std::string UxUy("UxUy");
+	std::string Load("Load");
+	
+	for (int i = 0; i < MESH.NumberOfBounds(); ++i)
+	{
+		if(!Ux.compare(Bounds[i].tag)) UxBoundNumber = i;
+		if(!Uy.compare(Bounds[i].tag)) UyBoundNumber = i;
+		if(!UxUy.compare(Bounds[i].tag)) UxUyBoundNumber = i;
+		if(!Load.compare(Bounds[i].tag)) LoadBoundNumber = i;
+	}
+	
+	double E = 210000.0, nu = 0.3;
+	
+	D << 1.0,   nu,                       0.0,
+				nu,      1.0,             0.0,
+				0.0,     0.0,  0.5*(1.0 - nu);
+							
+	D*=E/(1.0 - nu*nu);	
+}
 
 
 
@@ -178,13 +215,18 @@ void ISOFEMSOL::NonLocal_Static_Analysis(std::function<Eigen::Vector2d(Eigen::Ro
               << std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
               << " milliseconds\n";
 	
-	t1 = std::chrono::high_resolution_clock::now();		  
+	t1 = std::chrono::high_resolution_clock::now();
+	
+	NdxArray NdxArr;  NdxArr.resize(MESH.NumberOfElements());
+	JArray JArr;      JArr.resize(MESH.NumberOfElements());
+	JacArray JacArr;  JacArr.resize(MESH.NumberOfElements());
+	
 	{
 	std::vector<Triplet> TripletList;
 	
-	ConstructStiffMatr(TripletList);
+	ConstructStiffMatr(TripletList, NdxArr, JArr, JacArr);
 	
-	ConstructStiffMatr(TripletList,phi);
+	ConstructStiffMatr(TripletList, NdxArr, JArr, JacArr,phi);
 	t2 = std::chrono::high_resolution_clock::now();
 	std::cout << "ConstructStiffMatr time = "
               << std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
@@ -229,7 +271,7 @@ void ISOFEMSOL::NonLocal_Static_Analysis(std::function<Eigen::Vector2d(Eigen::Ro
               << " milliseconds\n";
 	
 	t1 = std::chrono::high_resolution_clock::now();
-	ComputeStress(phi);
+	ComputeStress(JacArr,phi);
 	t2 = std::chrono::high_resolution_clock::now();
 	std::cout << "ComputeStress time = "
               << std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
@@ -250,26 +292,241 @@ void ISOFEMSOL::NonLocal_Static_Analysis(std::function<Eigen::Vector2d(Eigen::Ro
 }
 
 
-
-void ISOFEMSOL::ConstructStiffMatr(std::vector<Triplet> &TripletList,std::function<double(const double &, const double &)> phi)
+void ISOFEMSOL::ConstructStiffMatr(std::vector<Triplet> &TripletList)
 {
+	
 	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
+	
+	unsigned Order;
 	
 	switch (MESH.NodesPerElement())
 	{
 		case 4: 
+		{
 			pFE.reset(new FINITE_ELEMENT::BilinearElement);
+			Order = 3;
 			break;
+		}
 		case 8:
+		{
 			pFE.reset(new FINITE_ELEMENT::QuadraticSerendipElement);
+			Order = 5;
 			break;
+		}
 	}
 	
 	NodesPerElement = pFE->NodesPerElement();
 	
 	NumberOfElements = MESH.NumberOfElements();
 	
-	const FINITE_ELEMENT::QuadratureUtils QuadUtil(pFE.get());
+	
+	const FINITE_ELEMENT::QuadratureUtils QuadUtil(pFE.get(),Order);
+	
+	
+	K.resize(NumberOfNodes * 2, NumberOfNodes * 2);
+	
+	Ke.resize(NodesPerElement * 2, NodesPerElement * 2);
+	
+	
+	Eigen::MatrixXd Ndx = Eigen::MatrixXd::Zero(2, NodesPerElement); // производные функции форм в глобаной ск
+	
+	Eigen::RowVectorXi ElementNodesNumbers(NodesPerElement);
+	
+	BT = Eigen::MatrixXd::Zero(NodesPerElement * 2, 3);
+	
+	B = Eigen::MatrixXd::Zero(3, NodesPerElement * 2);
+	
+	
+	int NumberOfTriplets = 0;
+	
+
+	NumberOfTriplets = NumberOfElements * 4 * NodesPerElement * NodesPerElement;
+
+	
+	TripletList.reserve(NumberOfTriplets);
+	
+	Eigen::MatrixXd ElementNodesCoord(NodesPerElement, 2);
+	
+	const auto &Nodes = MESH.Nodes();
+	const auto &Elements = MESH.Elements();
+	
+	std::vector<int> IdX(NodesPerElement * 2);
+	
+	for(int e = 0; e < NumberOfElements; ++e)
+	{
+		ElementNodesNumbers = Elements.row(e);
+		
+		Ke = Eigen::MatrixXd::Zero(NodesPerElement * 2, NodesPerElement * 2);
+		
+		for(int j = 0; j < NodesPerElement; ++j)
+		{		
+			ElementNodesCoord.row(j) = Nodes.row(ElementNodesNumbers(j));
+			IdX[j * 2] = ElementNodesNumbers(j) * 2;
+			IdX[j * 2 + 1] = ElementNodesNumbers(j) * 2 + 1; 
+		}	
+		
+		ComputeKe(QuadUtil.NumberOfQP(), QuadUtil.Weights(), ElementNodesCoord, QuadUtil.NGradArr(), Ndx);
+		
+		AddKeToTriplet(TripletList,IdX);
+			
+	}
+
+}
+
+
+void ISOFEMSOL::ConstructStiffMatr(std::vector<Triplet> &TripletList, NdxArray &NdxArr, JArray &JArr, JacArray &JacArr)
+{
+	
+	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
+	
+	unsigned Order;
+	
+	switch (MESH.NodesPerElement())
+	{
+		case 4: 
+		{
+			pFE.reset(new FINITE_ELEMENT::BilinearElement);
+			Order = 3;
+			break;
+		}
+		case 8:
+		{
+			Order = 5;
+			pFE.reset(new FINITE_ELEMENT::QuadraticSerendipElement);
+			break;
+		}
+	}
+	
+	NodesPerElement = pFE->NodesPerElement();
+	
+	NumberOfElements = MESH.NumberOfElements();
+	
+	
+	const FINITE_ELEMENT::QuadratureUtils QuadUtil(pFE.get(),Order);
+	
+	
+	K.resize(NumberOfNodes * 2, NumberOfNodes * 2);
+	
+	Ke.resize(NodesPerElement * 2, NodesPerElement * 2);
+	
+	
+	Eigen::MatrixXd Ndx = Eigen::MatrixXd::Zero(2, NodesPerElement); // производные функции форм в глобаной ск
+	
+	Eigen::RowVectorXi ElementNodesNumbers(NodesPerElement);
+	
+	BT = Eigen::MatrixXd::Zero(NodesPerElement * 2, 3);
+	
+	B = Eigen::MatrixXd::Zero(3, NodesPerElement * 2);
+	
+	
+	int NumberOfTriplets = 0;
+	
+	NaiveRnnSearch(RnnArr,L);
+		
+	NumberOfTriplets = NumberOfElements * 4 * NodesPerElement * NodesPerElement;
+		
+	for (size_t ei = 0; ei < NumberOfElements; ++ei)
+	{
+		NumberOfTriplets += RnnArr[ei].size() * 4 * NodesPerElement * NodesPerElement;
+	}
+
+	const auto NumberOfQP = QuadUtil.NumberOfQP();
+	
+	TripletList.reserve(NumberOfTriplets);
+	
+	Eigen::MatrixXd ElementNodesCoord(NodesPerElement, 2);
+	
+	const auto &Nodes = MESH.Nodes();
+	const auto &Elements = MESH.Elements();
+	
+	const auto &Narr = QuadUtil.Narr();
+	const auto &NGradArr = QuadUtil.NGradArr();
+	
+	const auto &Weights = QuadUtil.Weights();
+	
+	double Jac = 0.0;
+	
+
+	std::vector<int> IdX(NodesPerElement * 2);
+	
+	for(size_t e = 0; e < NumberOfElements; ++e)
+	{
+		ElementNodesNumbers = Elements.row(e);
+		
+		Ke = Eigen::MatrixXd::Zero(NodesPerElement * 2, NodesPerElement * 2);
+		
+		NdxArr[e].resize(NumberOfQP);
+		JArr[e].resize(NumberOfQP);
+		JacArr[e].resize(NumberOfQP);
+		
+		for(size_t j = 0; j < NodesPerElement; ++j)
+		{		
+			ElementNodesCoord.row(j) = Nodes.row(ElementNodesNumbers(j));
+			IdX[j * 2] = ElementNodesNumbers(j) * 2;
+			IdX[j * 2 + 1] = ElementNodesNumbers(j) * 2 + 1; 
+		}	
+		
+
+		for (size_t q = 0; q < NumberOfQP; ++q)
+		{
+			Jmatr = NGradArr[q] * ElementNodesCoord;
+			
+			JArr[e][q] = Jmatr;
+			
+			Ndx = Jmatr.inverse() * NGradArr[q];
+			
+			NdxArr[e][q] = Ndx;
+			
+			Jac = Jmatr.determinant();
+			
+			JacArr[e][q] = Jac;
+			
+			ComputeB(Ndx);
+		
+			Ke += Weights(q) * BT * D * B * Jac;
+		}
+	
+		Ke*=p1;
+
+		for(size_t j = 0; j < NodesPerElement * 2; ++j)		
+			for(size_t k = 0; k < NodesPerElement * 2; ++k)
+			{
+				if(IdX[k] <= IdX[j])
+				TripletList.push_back(Triplet(IdX[j], IdX[k], Ke(j, k)));
+			}
+	}
+}
+
+
+void ISOFEMSOL::ConstructStiffMatr(std::vector<Triplet> &TripletList, const NdxArray &NdxArr, const JArray &JArr, const JacArray &JacArr, 
+								   std::function<double(const double &, const double &)> phi)
+{
+	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
+	
+	unsigned Order;
+	switch (MESH.NodesPerElement())
+	{
+		case 4: 
+		{
+			pFE.reset(new FINITE_ELEMENT::BilinearElement);
+			Order = 3;
+			break;
+		}
+		case 8:
+		{
+			pFE.reset(new FINITE_ELEMENT::QuadraticSerendipElement);
+			Order = 5;
+			break;
+		}
+	}
+	
+	if(HighOrder!=-1) Order = HighOrder;
+	
+	NodesPerElement = pFE->NodesPerElement();
+	
+	NumberOfElements = MESH.NumberOfElements();
+	
+	const FINITE_ELEMENT::QuadratureUtils QuadUtil(pFE.get(), Order);
 	
 	Eigen::MatrixXd Ndxi = Eigen::MatrixXd::Zero(2, NodesPerElement); // производные функции форм в глобаной ск
 	Eigen::MatrixXd Ndxj = Eigen::MatrixXd::Zero(2, NodesPerElement); // производные функции форм в глобаной ск
@@ -296,17 +553,28 @@ void ISOFEMSOL::ConstructStiffMatr(std::vector<Triplet> &TripletList,std::functi
 	
 	const auto &Weights = QuadUtil.Weights();
 	
-	Eigen::Matrix2d Jmatri, Jmatrj;
+	const auto NumberOfQP = QuadUtil.NumberOfQP();
+	
+	std::vector<Eigen::MatrixXd> NdxiArr(NumberOfQP), NdxjArr(NumberOfQP);
+	
+	for(size_t i = 0; i < NumberOfQP; ++i)
+	{
+		NdxiArr[i] = Eigen::MatrixXd::Zero(2, NodesPerElement);
+		NdxjArr[i] = Eigen::MatrixXd::Zero(2, NodesPerElement);
+	}
+		
+	std::vector<Eigen::Matrix2d> JArri, JArrj; 
+	
+	JArri.resize(NumberOfQP); JArrj.resize(NumberOfQP);
+	
+	std::vector<double> Jaci(NumberOfQP), Jacj(NumberOfQP);
 	
 	std::vector<int> IdX1(NodesPerElement * 2), IdX2(NodesPerElement * 2);
 
 	for(int ei = 0; ei < NumberOfElements; ++ei)
 	{
-		
 		ElementNodesNumbersi = Elements.row(ei);
-		
-		
-		
+
 		for(int j = 0; j < NodesPerElement; ++j)
 		{		
 			ElementNodesCoordi.row(j) = Nodes.row(ElementNodesNumbersi(j));
@@ -314,6 +582,11 @@ void ISOFEMSOL::ConstructStiffMatr(std::vector<Triplet> &TripletList,std::functi
 			IdX1[j * 2 + 1] = ElementNodesNumbersi(j) * 2 + 1;
 		}
 		
+		JArri = JArr[ei];
+		
+		NdxiArr = NdxArr[ei];
+		
+		Jaci = JacArr[ei];
 		
 		for(int ej = 0; ej < RnnArr[ei].size(); ++ej)
 		{	
@@ -323,6 +596,11 @@ void ISOFEMSOL::ConstructStiffMatr(std::vector<Triplet> &TripletList,std::functi
 			
 			ElementNodesNumbersj = Elements.row(Ej);
 			
+			JArrj = JArr[Ej];
+		
+			NdxjArr = NdxArr[Ej];
+		
+			Jacj = JacArr[Ej];
 			
 			for(int j = 0; j < NodesPerElement; ++j)
 			{
@@ -331,18 +609,10 @@ void ISOFEMSOL::ConstructStiffMatr(std::vector<Triplet> &TripletList,std::functi
 				IdX2[j * 2 + 1] = ElementNodesNumbersj(j) * 2 + 1;
 			}
 			
-			for(int i = 0; i < QuadUtil.NumberOfQP(); ++i)
+			for(int qi = 0; qi < NumberOfQP; ++qi)
 			{	
-				Jmatri = NGradArr[i] * ElementNodesCoordi;
 				
-				Ndxi = Jmatri.inverse() * NGradArr[i];
-				
-// 				for(int k = 0; k < NodesPerElement; ++k)
-// 				{
-// 					B(0, k * 2) = Ndxi(0,k);
-// 					B(1,k * 2 + 1) = Ndxi(1,k);
-// 					B(2,k * 2) = Ndxi(1,k);    B(2,k * 2 + 1) = Ndxi(0,k);
-// 				}
+				Ndxi = NdxiArr[qi];
 				
 				for(int k = 0; k < NodesPerElement; ++k)
 				{
@@ -351,20 +621,12 @@ void ISOFEMSOL::ConstructStiffMatr(std::vector<Triplet> &TripletList,std::functi
 					BT(k * 2, 2) = Ndxi(1,k);    BT(k * 2 + 1, 2) = Ndxi(0,k);
 				}
 				
-				X = Narr[i] * ElementNodesCoordi;
+				X = Narr[qi] * ElementNodesCoordi;
 				
-				for(int j = 0; j < QuadUtil.NumberOfQP(); ++j)
+				for(int qj = 0; qj < QuadUtil.NumberOfQP(); ++qj)
 				{
-					Jmatrj = NGradArr[j] * ElementNodesCoordj;
+					Ndxj = NdxjArr[qj];
 					
-					Ndxj = Jmatrj.inverse() * NGradArr[j];
-					
-// 					for(int k = 0; k < NodesPerElement; ++k)
-// 					{
-// 						BT(k * 2, 0) = Ndxj(0,k);
-// 						BT(k * 2 + 1, 1) = Ndxj(1,k);
-// 						BT(k * 2, 2) = Ndxj(1,k);    BT(k * 2 + 1, 2) = Ndxj(0,k);
-// 					}
 
 					for(int k = 0; k < NodesPerElement; ++k)
 					{
@@ -374,13 +636,13 @@ void ISOFEMSOL::ConstructStiffMatr(std::vector<Triplet> &TripletList,std::functi
 					}					
 					
 					
-					Y = Narr[j] * ElementNodesCoordj;
+					Y = Narr[qj] * ElementNodesCoordj;
 					
 					R = X - Y;
 					
 					r = R.norm();
 					
-					Ke += Weights(i) * Weights(j) * BT * D * B * phi(r,L) *  Jmatri.determinant() * Jmatrj.determinant();
+					Ke += Weights(qi) * Weights(qj) * BT * D * B * phi(r,L) *  Jaci[qi] * Jacj[qj];
 				}
 			}	
 			
@@ -456,21 +718,28 @@ void ISOFEMSOL::ConstructRightPart(std::function<Eigen::Vector2d(Eigen::RowVecto
 	
 	auto &LoadBound = Bounds[LoadBoundNumber];
 	
+	unsigned Order;
 	switch (LoadBound.Elements.cols())
 	{
 		case 2:
+		{
 			pFE.reset(new FINITE_ELEMENT::LinearElement);
+			Order = 1;
 			break;
+		}
 		case 3:
+		{
 			pFE.reset(new FINITE_ELEMENT::QuadraticElement);
+			Order = 3;
 			break;
+		}
 	}
 	
 	NodesPerElement = pFE->NodesPerElement();
 	
 	NumberOfElements = LoadBound.Elements.rows();
 	
-	const FINITE_ELEMENT::QuadratureUtils QuadUtil(pFE.get());
+	const FINITE_ELEMENT::QuadratureUtils QuadUtil(pFE.get(),Order);
 	
 	Fe.resize(NodesPerElement * 2);
 	
@@ -539,95 +808,7 @@ void ISOFEMSOL::ConstructRightPart(std::function<Eigen::Vector2d(Eigen::RowVecto
 	
 }
 
-void ISOFEMSOL::ConstructStiffMatr(std::vector<Triplet> &TripletList)
-{
-	
-	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
-	
-	switch (MESH.NodesPerElement())
-	{
-		case 4: 
-			pFE.reset(new FINITE_ELEMENT::BilinearElement);
-			break;
-		case 8:
-			pFE.reset(new FINITE_ELEMENT::QuadraticSerendipElement);
-			break;
-	}
-	
-	NodesPerElement = pFE->NodesPerElement();
-	
-	NumberOfElements = MESH.NumberOfElements();
-	
-	
-	const FINITE_ELEMENT::QuadratureUtils QuadUtil(pFE.get());
-	
-	
-	K.resize(NumberOfNodes * 2, NumberOfNodes * 2);
-	
-	Ke.resize(NodesPerElement * 2, NodesPerElement * 2);
-	
-	
-	Eigen::MatrixXd Ndx = Eigen::MatrixXd::Zero(2, NodesPerElement); // производные функции форм в глобаной ск
-	
-	Eigen::RowVectorXi ElementNodesNumbers(NodesPerElement);
-	
-	BT = Eigen::MatrixXd::Zero(NodesPerElement * 2, 3);
-	
-	B = Eigen::MatrixXd::Zero(3, NodesPerElement * 2);
-	
-	
-	int NumberOfTriplets = 0;
-	
-	if(p1 == 1.0)
-	{
-		NumberOfTriplets = NumberOfElements * 4 * NodesPerElement * NodesPerElement;
-		
-	} else
-	{
-		NaiveRnnSearch(RnnArr,L);
-		
-		NumberOfTriplets = NumberOfElements * 4 * NodesPerElement * NodesPerElement;
-		
-		for (size_t ei = 0; ei < NumberOfElements; ++ei)
-		{
-			 NumberOfTriplets += RnnArr[ei].size() * 4 * NodesPerElement * NodesPerElement;
-		}
-		
-	}
-	
-	TripletList.reserve(NumberOfTriplets);
-	
-	Eigen::MatrixXd ElementNodesCoord(NodesPerElement, 2);
-	
-	const auto &Nodes = MESH.Nodes();
-	const auto &Elements = MESH.Elements();
-	
-	//const auto &Narr = QuadUtil.Narr();
-	//const auto &NGradArr = QuadUtil.NGradArr();
-	
 
-	std::vector<int> IdX(NodesPerElement * 2);
-	
-	for(int e = 0; e < NumberOfElements; ++e)
-	{
-		ElementNodesNumbers = Elements.row(e);
-		
-		Ke = Eigen::MatrixXd::Zero(NodesPerElement * 2, NodesPerElement * 2);
-		
-		for(int j = 0; j < NodesPerElement; ++j)
-		{		
-			ElementNodesCoord.row(j) = Nodes.row(ElementNodesNumbers(j));
-			IdX[j * 2] = ElementNodesNumbers(j) * 2;
-			IdX[j * 2 + 1] = ElementNodesNumbers(j) * 2 + 1; 
-		}	
-		
-		ComputeKe(QuadUtil.NumberOfQP(), QuadUtil.Weights(), ElementNodesCoord, QuadUtil.NGradArr(), Ndx);
-		
-		AddKeToTriplet(TripletList,IdX);
-			
-	}
-
-}
 
 void ISOFEMSOL::ApplyingConstraints()
 {
@@ -800,19 +981,25 @@ void ISOFEMSOL::ComputeStrains()
 	
 	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
 	
+	unsigned Order;
+	
 	switch (MESH.NodesPerElement())
 	{
 		case 4:
 		{
 			pFE.reset(new FINITE_ELEMENT::BilinearElement);
+			Order = 3;
 			break;
 		}
 		case 8:
 		{
-			pFE.reset(new FINITE_ELEMENT::QuadraticSerendipElement);			
+			pFE.reset(new FINITE_ELEMENT::QuadraticSerendipElement);
+			Order = 5;
 			break;
 		}
 	}
+	
+	const FINITE_ELEMENT::QuadratureUtils QuadUtil(pFE.get(), Order);
 	
 	Eigen::MatrixXd NQP(NodesPerElement,NodesPerElement);
 	
@@ -825,7 +1012,7 @@ void ISOFEMSOL::ComputeStrains()
 	Eigen::RowVectorXi ElementNodesNumbers(NodesPerElement);
 	
 	
-	const FINITE_ELEMENT::QuadratureUtils QuadUtil(pFE.get());
+	
 	
 	const auto &Nodes = MESH.Nodes();
 	const auto &Elements = MESH.Elements();
@@ -988,7 +1175,7 @@ void ISOFEMSOL::ComputeStress()
 }
 
 
-void ISOFEMSOL::ComputeStress(std::function<double(const double&, const double &)> phi)
+void ISOFEMSOL::ComputeStress(const JacArray &JacArr ,std::function<double(const double&, const double &)> phi)
 {
 	SigmaXX.resize(NumberOfNodes); SigmaYY.resize(NumberOfNodes); SigmaXY.resize(NumberOfNodes);
 	
@@ -1001,17 +1188,28 @@ void ISOFEMSOL::ComputeStress(std::function<double(const double&, const double &
 	
 	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
 	
-	
+	unsigned Order;
 	
 	switch (MESH.NodesPerElement())
 	{
 		case 4: 
-			pFE.reset(new FINITE_ELEMENT::BilinearElement);			
+		{
+			pFE.reset(new FINITE_ELEMENT::BilinearElement);
+			Order = 3;
 			break;
+		}
 		case 8:
+		{
 			pFE.reset(new FINITE_ELEMENT::QuadraticSerendipElement);
+			Order = 5;
 			break;
+		}
 	}
+	
+	if(HighOrder!=-1) Order = HighOrder;
+	
+	const FINITE_ELEMENT::QuadratureUtils QuadUtil(pFE.get(), Order);
+	
 	
 	NodesPerElement = pFE->NodesPerElement();
 	
@@ -1039,9 +1237,6 @@ void ISOFEMSOL::ComputeStress(std::function<double(const double&, const double &
 	Eigen::VectorXd SigmaYY_QP = Eigen::VectorXd::Zero(NodesPerElement);	
 	
 	Eigen::VectorXd SigmaXY_QP = Eigen::VectorXd::Zero(NodesPerElement);
-	
-	
-	const FINITE_ELEMENT::QuadratureUtils QuadUtil(pFE.get());
 
 	
 	Eigen::RowVectorXi ElementNodesNumbersi(NodesPerElement);
@@ -1070,6 +1265,10 @@ void ISOFEMSOL::ComputeStress(std::function<double(const double&, const double &
 	Eigen::MatrixXd b = Eigen::MatrixXd::Identity(NodesPerElement,NodesPerElement);
 	
 	Eigen::MatrixXd NQPI = NQP.fullPivLu().solve(b);
+	
+	const auto NumberOfQP = QuadUtil.NumberOfQP();
+	
+	std::vector<double> Jac(NumberOfQP);
 	
 	for(int ei = 0; ei < NumberOfElements; ++ei)
 	{		
@@ -1104,6 +1303,8 @@ void ISOFEMSOL::ComputeStress(std::function<double(const double&, const double &
 		{
 			ElementNodesNumbersj = Elements.row(RnnArr[ei][ej]);
 			
+			Jac = JacArr[RnnArr[ei][ej]];
+			
 			for(int j = 0; j < NodesPerElement; ++j)
 				ElementNodesCoordj.row(j) = Nodes.row(ElementNodesNumbersj(j));
 			
@@ -1130,9 +1331,8 @@ void ISOFEMSOL::ComputeStress(std::function<double(const double&, const double &
 				Epsi(1) = Narr[q] * EpsiYY_Element;
 				Epsi(2) = Narr[q] * EpsiXY_Element;
 				
-				Jmatr = NGradArr[q] * ElementNodesCoordj;
 				
-				Sigma = Weights(q) * phi(r,L) * D * Epsi * Jmatr.determinant();
+				Sigma = Weights(q) * phi(r,L) * D * Epsi * Jac[q];
 				
 				SigmaXX_QP(q) = Sigma(0);
 				SigmaYY_QP(q) = Sigma(1);

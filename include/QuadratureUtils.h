@@ -8,8 +8,8 @@ namespace FINITE_ELEMENT
 	class QuadratureUtils
 	{
 	public:
-		QuadratureUtils(FiniteElement *pE);
-	
+		QuadratureUtils(FiniteElement *pE, unsigned const Order);
+		
 		const Eigen::RowVectorXd &Weights() const;
 	
 		const Eigen::MatrixXd &QuadPoint() const;
@@ -26,15 +26,17 @@ namespace FINITE_ELEMENT
 		
 		FiniteElement *pE;
 		
+		unsigned const Order;
+		
 		Eigen::RowVectorXd _Weights;
 		Eigen::MatrixXd _QuadPoint;
 		
 		std::vector<Eigen::RowVectorXd> _Narr;
 		std::vector<Eigen::MatrixXd> _NGradArr;
 		
-		void SetQuadratureRule(unsigned const &Npe);
+		void SetQuadratureRule();
 	
-		void SetShFVal(FiniteElement *pE);
+		void SetShFVal();
 
 	};
 

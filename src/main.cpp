@@ -8,6 +8,7 @@
 
 int main(int argc, char *argv[])
 {
+
 	assert(argc > 1);
 	
 	const auto Load = [](Eigen::RowVector2d &X)->Eigen::Vector2d 
@@ -21,19 +22,13 @@ int main(int argc, char *argv[])
 	
 	if (argc == 2)
 	{
-		ISOFEMSOL Task(argv[1], 1.0);	
+		ISOFEMSOL Task(argv[1]);	
 	
 		Task.Static_Analysis(Load);
 	}
 	
 	if(argc > 2)
 	{
-		unsigned N = std::stoi(argv[2]);
-	
-		double p1 = std::stod(argv[3]);
-	
-		double L = std::stod(argv[4]);
-		
 		const auto phi1 =[](const double &r, const double &L)->double 
 		{
 			double l = 0.8 * L;
@@ -53,20 +48,56 @@ int main(int argc, char *argv[])
 			return res;
 		};
 		
-		
-		ISOFEMSOL Task(argv[1], p1, L);
-		
-		switch(N)
-		{
-			case 1:
-				Task.NonLocal_Static_Analysis(Load, phi1);
-				break;
-			case 2:
-				Task.NonLocal_Static_Analysis(Load, phi2);
-				break;
-			default:
-				break;
 				
+		
+		if(argc == 5)
+		{
+			int N = std::stoi(argv[2]);
+	
+			double p1 = std::stod(argv[3]);
+		
+			double L = std::stod(argv[4]);
+			
+			ISOFEMSOL Task(argv[1], p1, L);
+						
+			switch(N)
+			{
+				case 1:
+					Task.NonLocal_Static_Analysis(Load, phi1);
+					break;
+				case 2:
+					Task.NonLocal_Static_Analysis(Load, phi2);
+					break;
+				default:
+					break;
+					
+			}
+		}
+		
+		if(argc == 6)
+		{	
+			int N = std::stoi(argv[2]);
+	
+			double p1 = std::stod(argv[3]);
+		
+			double L = std::stod(argv[4]);
+		
+			int HighOrder = std::stoi(argv[5]);
+			
+			ISOFEMSOL Task(argv[1], p1, L, HighOrder);
+	
+			switch(N)
+			{
+				case 1:
+					Task.NonLocal_Static_Analysis(Load, phi1);
+					break;
+				case 2:
+					Task.NonLocal_Static_Analysis(Load, phi2);
+					break;
+				default:
+					break;
+					
+			}
 		}
 	
  	}
