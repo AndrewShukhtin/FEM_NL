@@ -472,8 +472,6 @@ void ISOFEMSOL::ConstructRightPart(std::function<Eigen::Vector2d(Eigen::RowVecto
 	
 	const FINITE_ELEMENT::QuadratureUtils QuadUtil(pFE.get());
 	
-	std::vector<int> LoadNodes = UniqueNodes(LoadBound.Elements);
-	
 	Fe.resize(NodesPerElement * 2);
 	
 	F.resize(NumberOfNodes * 2);
@@ -513,13 +511,10 @@ void ISOFEMSOL::ConstructRightPart(std::function<Eigen::Vector2d(Eigen::RowVecto
 			
 		}		
 		
-// 		std::cout << "\ElementNodesCoord:\n" << ElementNodesCoord << std::endl;
 		
 		for (int j = 0; j < QuadUtil.NumberOfQP(); ++j)
 		{
 			Jvec = NGradArr[j] * ElementNodesCoord;
-			
-// 			std::cout << "\nJvec:\n" << Jvec << std::endl;
 			
 			P =  Pn*Narr[j].transpose();
 		
@@ -534,7 +529,6 @@ void ISOFEMSOL::ConstructRightPart(std::function<Eigen::Vector2d(Eigen::RowVecto
 			
 		}
 		
-		//std::cout <<"Fe:\n" << Fe << std::endl;
 		
 		for(int j = 0; j < NodesPerElement; ++j)
 		{
@@ -639,7 +633,7 @@ void ISOFEMSOL::ApplyingConstraints()
 {
 	auto &Bounds = MESH.Bounds();
 	std::vector<int> constraintIdx;
-	constraintIdx.reserve(10);
+	constraintIdx.reserve(1000);
 	
 // 	printf("\nConstructRightPart\nNumberOfNodes = %d, NumberOfElements = %d, NodesPerElement = %d, UxBoundNumber = %d, \nUyBoundNumber = %d, UxUyBoundNumber = %d, LoadBoundNumber = %d\n", NumberOfNodes, NumberOfElements, NodesPerElement, UxBoundNumber,UyBoundNumber, UxUyBoundNumber, LoadBoundNumber );
 	
@@ -660,11 +654,7 @@ void ISOFEMSOL::ApplyingConstraints()
 			constraintIdx.push_back(2*fixedNodes[i] + 1);
 		}
 		
-// 		std::cout << "\nfixedNodes:" << std::endl;
-// 		for(auto x: fixedNodes)
-// 			std::cout << x << " ";
-// 		std::cout << std::endl;
-		
+
 	} 
 	
 	if(UxBoundNumber !=-1)
@@ -700,11 +690,8 @@ void ISOFEMSOL::ApplyingConstraints()
 		
 	}
 	
-// 	std::cout << "\nconstraintIdx:\n" << std::endl;
-// 		for(auto x: constraintIdx)
-// 			std::cout << x << " ";
-// 		std::cout << std::endl;
-	
+	constraintIdx.shrink_to_fit();
+		
 	for(size_t i = 0; i < constraintIdx.size(); ++i)
 		F(constraintIdx[i]) = 0.0;
 	
@@ -813,23 +800,21 @@ void ISOFEMSOL::ComputeStrains()
 	
 	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
 	
-	Eigen::MatrixXd NQP;
-	
 	switch (MESH.NodesPerElement())
 	{
 		case 4:
 		{
 			pFE.reset(new FINITE_ELEMENT::BilinearElement);
-			NQP.resize(4,4);
 			break;
 		}
 		case 8:
 		{
-			pFE.reset(new FINITE_ELEMENT::QuadraticSerendipElement);
-			NQP.resize(8,8);
+			pFE.reset(new FINITE_ELEMENT::QuadraticSerendipElement);			
 			break;
 		}
 	}
+	
+	Eigen::MatrixXd NQP(NodesPerElement,NodesPerElement);
 	
 	NodesPerElement = pFE->NodesPerElement();
 	
@@ -851,28 +836,10 @@ void ISOFEMSOL::ComputeStrains()
 	const auto &Weights = QuadUtil.Weights();
 	
 	
-	switch (MESH.NodesPerElement())
-	{
-		case 4: 
-			pFE.reset(new FINITE_ELEMENT::BilinearElement);
-			
-			for(int q = 0; q < 4; ++q)
-				NQP.row(q) =  Narr[q];
-			break;
-		case 8:
-			pFE.reset(new FINITE_ELEMENT::QuadraticSerendipElement);
-			
-			for(int q = 0; q < 4; ++q)
-			{
-				NQP.row(q) = Narr[q];
-			}
-			
-			for(int q = 5; q < 9; ++q)
-			{
-				NQP.row(q - 1) = Narr[q];
-			}
-			break;
-	}
+	for(int q = 0; q < NodesPerElement; ++q)
+		NQP.row(q) =  Narr[q];
+	
+
 	
 	Eigen::MatrixXd b = Eigen::MatrixXd::Identity(NodesPerElement,NodesPerElement);
 	
@@ -964,7 +931,6 @@ std::map<int, int> ISOFEMSOL::Counter(const Eigen::MatrixXi &Elements)
     for (auto val = vals.begin(); val != vals.end(); ++val) 
 		rv[*val]++;
 
-	
 	return rv;
 }
 
@@ -1019,13 +985,6 @@ void ISOFEMSOL::ComputeStress()
 	
 	auto &LoadBound = Bounds[LoadBoundNumber];
 	
-// 	std::vector<int> LoadNodes = UniqueNodes(LoadBound.Elements);
-// 	
-// 	std::cout << "\n\nSigmaXX at LoadBound nodes:\n";
-// 	for(auto i = LoadNodes.begin(); i!=LoadNodes.end(); ++i)
-// 		std::cout << SigmaXX(*i) <<" ";
-// 	std::cout<<std::endl;
-// 	std::cout<<std::endl;
 }
 
 
@@ -1042,24 +1001,23 @@ void ISOFEMSOL::ComputeStress(std::function<double(const double&, const double &
 	
 	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
 	
-	Eigen::MatrixXd NQP;
+	
 	
 	switch (MESH.NodesPerElement())
 	{
 		case 4: 
 			pFE.reset(new FINITE_ELEMENT::BilinearElement);			
-			NQP.resize(4,4);
 			break;
 		case 8:
 			pFE.reset(new FINITE_ELEMENT::QuadraticSerendipElement);
-			NQP.resize(8,8);
 			break;
 	}
-	
 	
 	NodesPerElement = pFE->NodesPerElement();
 	
 	NumberOfElements = MESH.NumberOfElements();
+	
+	Eigen::MatrixXd NQP(NodesPerElement,NodesPerElement);
 	
 		
 	Eigen::VectorXd EpsiXX_Element = Eigen::VectorXd::Zero(NodesPerElement);
@@ -1104,28 +1062,10 @@ void ISOFEMSOL::ComputeStress(std::function<double(const double&, const double &
 	
 	const auto &Weights = QuadUtil.Weights();
 	
-	switch (MESH.NodesPerElement())
-	{
-		case 4: 
-			pFE.reset(new FINITE_ELEMENT::BilinearElement);
-			
-			for(int q = 0; q < 4; ++q)
-				NQP.row(q) = Weights(q) * Narr[q];
-			break;
-		case 8:
-			pFE.reset(new FINITE_ELEMENT::QuadraticSerendipElement);
-			
-			for(int q = 0; q < 4; ++q)
-			{
-				NQP.row(q) = Weights(q) * Narr[q];
-			}
-			
-			for(int q = 5; q < 9; ++q)
-			{
-				NQP.row(q - 1) = Weights(q) * Narr[q];
-			}
-			break;
-	}
+
+	for(int q = 0; q < NodesPerElement; ++q)
+		NQP.row(q) = Weights(q) * Narr[q];
+
 	
 	Eigen::MatrixXd b = Eigen::MatrixXd::Identity(NodesPerElement,NodesPerElement);
 	
@@ -1175,83 +1115,31 @@ void ISOFEMSOL::ComputeStress(std::function<double(const double&, const double &
 			}
 			
 		
-			switch (MESH.NodesPerElement())
+
+			for(int q = 0; q < NodesPerElement; ++q)
 			{
-				case 4: 
-					
-					for(int q = 0; q < 4; ++q)
-					{
-						X = Narr[q] * ElementNodesCoordi;
-						
-						Y = Narr[q] * ElementNodesCoordj;
-						
-						R = X - Y;
-						
-						r = R.norm();
-						
-						Epsi(0) = Narr[q] * EpsiXX_Element;
-						Epsi(1) = Narr[q] * EpsiYY_Element;
-						Epsi(2) = Narr[q] * EpsiXY_Element;
-						
-						Jmatr = NGradArr[q] * ElementNodesCoordj;
-						
-						Sigma = Weights(q) * phi(r,L) * D * Epsi * Jmatr.determinant();
-						
-						SigmaXX_QP(q) = Sigma(0);
-						SigmaYY_QP(q) = Sigma(1);
-						SigmaXY_QP(q) = Sigma(2);
-						
-					}
-					break;
-				case 8:
-					
-					for(int q = 0; q < 4; ++q)
-					{
-						X = Narr[q] * ElementNodesCoordi;
-						
-						Y = Narr[q] * ElementNodesCoordj;
-						
-						R = X - Y;
-						
-						r = R.norm();						
-						
-						Epsi(0) = Narr[q] * EpsiXX_Element;
-						Epsi(1) = Narr[q] * EpsiYY_Element;
-						Epsi(2) = Narr[q] * EpsiXY_Element;
-						
-						Jmatr = NGradArr[q] * ElementNodesCoordj;
-						
-						Sigma =  Weights(q) * phi(r,L) * D * Epsi * Jmatr.determinant();
-						
-						SigmaXX_QP(q) = Sigma(0);
-						SigmaYY_QP(q) = Sigma(1);
-						SigmaXY_QP(q) = Sigma(2);
-					}
-					
-					for(int q = 5; q < 9; ++q)
-					{
-						X = Narr[q] * ElementNodesCoordi;
-						
-						Y = Narr[q] * ElementNodesCoordj;
-						
-						R = X - Y;
-						
-						r = R.norm();
-						
-						Epsi(0) = Narr[q] * EpsiXX_Element;
-						Epsi(1) = Narr[q] * EpsiYY_Element;
-						Epsi(2) = Narr[q] * EpsiXY_Element;
-						
-						Jmatr = NGradArr[q] * ElementNodesCoordj;
-						
-						Sigma =  Weights(q) * phi(r,L) * D * Epsi * Jmatr.determinant();
-						
-						SigmaXX_QP(q - 1) = Sigma(0);
-						SigmaYY_QP(q - 1) = Sigma(1);
-						SigmaXY_QP(q - 1) = Sigma(2);
-					}
-					break;
+				X = Narr[q] * ElementNodesCoordi;
+				
+				Y = Narr[q] * ElementNodesCoordj;
+				
+				R = X - Y;
+				
+				r = R.norm();
+				
+				Epsi(0) = Narr[q] * EpsiXX_Element;
+				Epsi(1) = Narr[q] * EpsiYY_Element;
+				Epsi(2) = Narr[q] * EpsiXY_Element;
+				
+				Jmatr = NGradArr[q] * ElementNodesCoordj;
+				
+				Sigma = Weights(q) * phi(r,L) * D * Epsi * Jmatr.determinant();
+				
+				SigmaXX_QP(q) = Sigma(0);
+				SigmaYY_QP(q) = Sigma(1);
+				SigmaXY_QP(q) = Sigma(2);
+				
 			}
+
 		
 			
 			SigmaXX_Element += NQPI * SigmaXX_QP;
@@ -1280,17 +1168,6 @@ void ISOFEMSOL::ComputeStress(std::function<double(const double&, const double &
 		SigmaYY(count->first)/=count->second;		
 	}
 	
-	auto &Bounds = MESH.Bounds();
-	
-	auto &LoadBound = Bounds[LoadBoundNumber];
-	
-// 	std::vector<int> LoadNodes = UniqueNodes(LoadBound.Elements);
-// 	
-// 	std::cout << "\n\nSigmaXX at LoadBound nodes:\n";
-// 	for(auto i = LoadNodes.begin(); i!=LoadNodes.end(); ++i)
-// 		std::cout << SigmaXX(*i) <<" ";
-// 	std::cout<<std::endl;
-// 	std::cout<<std::endl;
 }
 
 
