@@ -1130,6 +1130,7 @@ void ISOFEMSOL::ComputeStress()
 	SigmaXX =  Eigen::VectorXd::Zero(NumberOfNodes);
 	SigmaXY =  Eigen::VectorXd::Zero(NumberOfNodes);
 	SigmaYY =  Eigen::VectorXd::Zero(NumberOfNodes);
+	SigmaVM =  Eigen::VectorXd::Zero(NumberOfNodes);
 	
 	Eigen::VectorXd Sigma =  Eigen::VectorXd::Zero(3);
 	Eigen::VectorXd Epsi  =  Eigen::VectorXd::Zero(3);
@@ -1138,11 +1139,11 @@ void ISOFEMSOL::ComputeStress()
 	
 	const auto &Elements = MESH.Elements();
 	
-	for(int e = 0; e < NumberOfElements; ++e)
+	for(size_t e = 0; e < NumberOfElements; ++e)
 	{		
 		ElementNodesNumbers = Elements.row(e);
 		
-		for (int j = 0; j < NodesPerElement; ++j)
+		for (size_t j = 0; j < NodesPerElement; ++j)
 		{
 			
 			Epsi(0) = EpsiXX(ElementNodesNumbers(j));
@@ -1168,10 +1169,8 @@ void ISOFEMSOL::ComputeStress()
 		SigmaYY(count->first)/=count->second;
 	}
 	
-	auto &Bounds = MESH.Bounds();
-	
-	auto &LoadBound = Bounds[LoadBoundNumber];
-	
+	for(size_t i = 0; i < NumberOfNodes; ++i)
+		SigmaVM(i) = sqrt(SigmaXX[i] * SigmaXX[i] + SigmaYY[i] * SigmaYY[i] - SigmaXX[i] * SigmaYY[i] + 3.0 * SigmaXY[i] * SigmaXY[i]);
 }
 
 
@@ -1182,6 +1181,7 @@ void ISOFEMSOL::ComputeStress(const JacArray &JacArr ,std::function<double(const
 	SigmaXX =  Eigen::VectorXd::Zero(NumberOfNodes);
 	SigmaXY =  Eigen::VectorXd::Zero(NumberOfNodes);
 	SigmaYY =  Eigen::VectorXd::Zero(NumberOfNodes);
+	SigmaVM =  Eigen::VectorXd::Zero(NumberOfNodes);
 	
 	Eigen::VectorXd Sigma =  Eigen::VectorXd::Zero(3);
 	Eigen::VectorXd Epsi  =  Eigen::VectorXd::Zero(3);
@@ -1368,6 +1368,8 @@ void ISOFEMSOL::ComputeStress(const JacArray &JacArr ,std::function<double(const
 		SigmaYY(count->first)/=count->second;		
 	}
 	
+		for(size_t i = 0; i < NumberOfNodes; ++i)
+			SigmaVM(i) = sqrt(SigmaXX[i] * SigmaXX[i] + SigmaYY[i] * SigmaYY[i] - SigmaXX[i] * SigmaYY[i] + 3.0 * SigmaXY[i] * SigmaXY[i]);
 }
 
 
@@ -1376,15 +1378,36 @@ void ISOFEMSOL::WriteToVTK(std::string _filename)
 	
 	_filename.erase(_filename.end()-4, _filename.end());
 	
+		
+	std::string strp1 = std::to_string(p1);
+	std::string strL = std::to_string(L);
+	
+	if(strp1.size() > 3) strp1.erase(strp1.begin() + 3, strp1.end());
+	if(strL.size() > 5) strL.erase(strL.begin() + 5, strL.end());
+	
 	std::string path ("VTK/");
 	
-	path += _filename;
 	
-	std::string command = "mkdir -p " + path;
+	if(p1 == 1.0)
+	{
+		path += _filename + "/"; 
 	
-	system(command.c_str());
+		std::string command = "mkdir -p " + path;
 	
-	_filename = "VTK/" + _filename  + "/"+_filename + "_" + std::to_string(p1) +".vtk";
+		system(command.c_str());
+
+		_filename = path +_filename + ".vtk";
+	}
+	else
+	{
+		path += _filename + "/" + strp1 + "/"; 
+	
+		std::string command = "mkdir -p " + path;
+		
+		system(command.c_str());
+		
+		_filename = path +_filename + "_" + strp1 + "_" + strL + ".vtk";
+	}
 	
 	std::cout << _filename << std::endl;
 	
@@ -1494,6 +1517,12 @@ void ISOFEMSOL::WriteToVTK(std::string _filename)
 	
 	for(int i = 0; i < MESH.NumberOfNodes(); ++i)
 		vtkfile << SigmaXY(i) << std::endl;
+	
+	vtkfile << "SCALARS SigmaVM double " << 1 << std::endl;
+	vtkfile << "LOOKUP_TABLE default" << std::endl;
+	
+	for(int i = 0; i < MESH.NumberOfNodes(); ++i)
+		vtkfile << SigmaVM(i) << std::endl;
 	
 	vtkfile.close();
 }

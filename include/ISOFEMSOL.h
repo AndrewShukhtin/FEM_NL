@@ -53,7 +53,7 @@ private:
 	
 	Eigen::VectorXd U;         // глобальный вектор Перемещений
 	Eigen::VectorXd EpsiXX,  EpsiYY,  EpsiXY,  EpsiZZ;
-	Eigen::VectorXd SigmaXX, SigmaYY, SigmaXY, SigmaZZ;
+	Eigen::VectorXd SigmaXX, SigmaYY, SigmaXY, SigmaVM;
 	
 	std::map<int, int> cN;
 	
