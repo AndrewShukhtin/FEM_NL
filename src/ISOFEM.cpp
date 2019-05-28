@@ -1,7 +1,7 @@
-#include "ISOFEMSOL.h"
+#include "ISOFEM.h"
 
 
-ISOFEMSOL::ISOFEMSOL(std::string _filename)
+ISOFEM::ISOFEM(std::string _filename)
 {
 	MESH.ReadMesh(_filename);
 	
@@ -42,7 +42,7 @@ ISOFEMSOL::ISOFEMSOL(std::string _filename)
 
 
 
-ISOFEMSOL::ISOFEMSOL(std::string _filename, double _p1, double _R):p1(_p1), L(_R)
+ISOFEM::ISOFEM(std::string _filename, double _p1, double _R):p1(_p1), L(_R)
 {
 	MESH.ReadMesh(_filename);
 	
@@ -79,7 +79,7 @@ ISOFEMSOL::ISOFEMSOL(std::string _filename, double _p1, double _R):p1(_p1), L(_R
 }
 
 
-ISOFEMSOL::ISOFEMSOL(std::string _filename, double _p1, double _R, int _HighOrder):p1(_p1), L(_R), HighOrder( _HighOrder)
+ISOFEM::ISOFEM(std::string _filename, double _p1, double _R, int _HighOrder):p1(_p1), L(_R), HighOrder( _HighOrder)
 {
 	MESH.ReadMesh(_filename);
 	
@@ -117,7 +117,7 @@ ISOFEMSOL::ISOFEMSOL(std::string _filename, double _p1, double _R, int _HighOrde
 
 
 
-void ISOFEMSOL::Static_Analysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load)
+void ISOFEM::StaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load)
 {
 	auto T1 = std::chrono::high_resolution_clock::now();
 	
@@ -203,7 +203,7 @@ void ISOFEMSOL::Static_Analysis(std::function<Eigen::Vector2d(Eigen::RowVector2d
 
 };
 
-void ISOFEMSOL::NonLocal_Static_Analysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load, 
+void ISOFEM::NonLocalStaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load, 
 		std::function<double(const double &, const double &)> phi)
 {
 	auto T1 = std::chrono::high_resolution_clock::now();
@@ -216,66 +216,68 @@ void ISOFEMSOL::NonLocal_Static_Analysis(std::function<Eigen::Vector2d(Eigen::Ro
               << " milliseconds\n";
 	
 	t1 = std::chrono::high_resolution_clock::now();
-	
-	NdxArray NdxArr;  NdxArr.resize(MESH.NumberOfElements());
-	JArray JArr;      JArr.resize(MESH.NumberOfElements());
-	JacArray JacArr;  JacArr.resize(MESH.NumberOfElements());
-	
 	{
-	std::vector<Triplet> TripletList;
-	
-	ConstructStiffMatr(TripletList, NdxArr, JArr, JacArr);
-	
-	ConstructStiffMatr(TripletList, NdxArr, JArr, JacArr,phi);
-	t2 = std::chrono::high_resolution_clock::now();
-	std::cout << "ConstructStiffMatr time = "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
-              << " milliseconds\n";
-	
-	TripletList.shrink_to_fit();
-	
-	t1 = std::chrono::high_resolution_clock::now();
-	K.setFromTriplets(TripletList.begin(), TripletList.end());
-	
-	t2 = std::chrono::high_resolution_clock::now();
-	std::cout << "SetFromTriplets time = "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
-              << " milliseconds\n";
+		NdxArray NdxArr;  NdxArr.resize(MESH.NumberOfElements());
+		JArray JArr;      JArr.resize(MESH.NumberOfElements());
+		JacArray JacArr;  JacArr.resize(MESH.NumberOfElements());
+		
+		{
+			std::vector<Triplet> TripletList;
+			
+			ConstructStiffMatr(TripletList, NdxArr, JArr, JacArr);
+			
+			ConstructStiffMatr(TripletList, NdxArr, JArr, JacArr,phi);
+			t2 = std::chrono::high_resolution_clock::now();
+			std::cout << "ConstructStiffMatr time = "
+					<< std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
+					<< " milliseconds\n";
+			
+			TripletList.shrink_to_fit();
+			
+			t1 = std::chrono::high_resolution_clock::now();
+			K.setFromTriplets(TripletList.begin(), TripletList.end());
+			
+			t2 = std::chrono::high_resolution_clock::now();
+			std::cout << "SetFromTriplets time = "
+					<< std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
+					<< " milliseconds\n";
+		}
+		
+		t1 = std::chrono::high_resolution_clock::now();
+		ApplyingConstraints();
+		t2 = std::chrono::high_resolution_clock::now();
+		std::cout << "ApplyingConstraints time = "
+				<< std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
+				<< " milliseconds\n";
+				
+		Eigen::ConjugateGradient<Eigen::SparseMatrix<double>,Eigen::Lower> Solver;
+		
+		Solver.compute(K);	
+		
+		t1 = std::chrono::high_resolution_clock::now();
+		U = Solver.solve(F);
+		t2 = std::chrono::high_resolution_clock::now();
+		std::cout << "System solve time = "
+				<< std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
+				<< " milliseconds\n";
+		
+	// 	std::cout <<"\nU:\n"<< U <<std::endl;
+		
+		t1 = std::chrono::high_resolution_clock::now();
+		cN = Counter(MESH.Elements());
+		ComputeStrains();
+		t2 = std::chrono::high_resolution_clock::now();
+		std::cout << "ComputeStrains time = "
+				<< std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
+				<< " milliseconds\n";
+		
+		t1 = std::chrono::high_resolution_clock::now();
+		ComputeStress(JacArr,phi);
+		t2 = std::chrono::high_resolution_clock::now();
+		std::cout << "ComputeStress time = "
+				<< std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
+				<< " milliseconds\n";
 	}
-	t1 = std::chrono::high_resolution_clock::now();
-	ApplyingConstraints();
-	t2 = std::chrono::high_resolution_clock::now();
-	std::cout << "ApplyingConstraints time = "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
-              << " milliseconds\n";
-			  
-	Eigen::ConjugateGradient<Eigen::SparseMatrix<double>,Eigen::Lower> Solver;
-	
-	Solver.compute(K);	
-	
-	t1 = std::chrono::high_resolution_clock::now();
-	U = Solver.solve(F);
-	t2 = std::chrono::high_resolution_clock::now();
-	std::cout << "System solve time = "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
-              << " milliseconds\n";
-	
-// 	std::cout <<"\nU:\n"<< U <<std::endl;
-	
-	t1 = std::chrono::high_resolution_clock::now();
-	cN = Counter(MESH.Elements());
-	ComputeStrains();
-	t2 = std::chrono::high_resolution_clock::now();
-	std::cout << "ComputeStrains time = "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
-              << " milliseconds\n";
-	
-	t1 = std::chrono::high_resolution_clock::now();
-	ComputeStress(JacArr,phi);
-	t2 = std::chrono::high_resolution_clock::now();
-	std::cout << "ComputeStress time = "
-              << std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
-              << " milliseconds\n";
 	
 	t1 = std::chrono::high_resolution_clock::now();
 	WriteToVTK(MESH.FileName());
@@ -292,7 +294,7 @@ void ISOFEMSOL::NonLocal_Static_Analysis(std::function<Eigen::Vector2d(Eigen::Ro
 }
 
 
-void ISOFEMSOL::ConstructStiffMatr(std::vector<Triplet> &TripletList)
+void ISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList)
 {
 	
 	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
@@ -374,7 +376,7 @@ void ISOFEMSOL::ConstructStiffMatr(std::vector<Triplet> &TripletList)
 }
 
 
-void ISOFEMSOL::ConstructStiffMatr(std::vector<Triplet> &TripletList, NdxArray &NdxArr, JArray &JArr, JacArray &JacArr)
+void ISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList, NdxArray &NdxArr, JArray &JArr, JacArray &JacArr)
 {
 	
 	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
@@ -498,7 +500,7 @@ void ISOFEMSOL::ConstructStiffMatr(std::vector<Triplet> &TripletList, NdxArray &
 }
 
 
-void ISOFEMSOL::ConstructStiffMatr(std::vector<Triplet> &TripletList, const NdxArray &NdxArr, const JArray &JArr, const JacArray &JacArr, 
+void ISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList, const NdxArray &NdxArr, const JArray &JArr, const JacArray &JacArr, 
 								   std::function<double(const double &, const double &)> phi)
 {
 	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
@@ -663,7 +665,7 @@ void ISOFEMSOL::ConstructStiffMatr(std::vector<Triplet> &TripletList, const NdxA
 }
 
 
-void ISOFEMSOL::NaiveRnnSearch(std::vector<std::vector<int>> &RnnArr, const double &L)
+void ISOFEM::NaiveRnnSearch(std::vector<std::vector<int>> &RnnArr, const double &L)
 {
 	const auto &Elements = MESH.Elements();
 	const auto &Nodes = MESH.Nodes();
@@ -710,7 +712,7 @@ void ISOFEMSOL::NaiveRnnSearch(std::vector<std::vector<int>> &RnnArr, const doub
 }
 
 
-void ISOFEMSOL::ConstructRightPart(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load)
+void ISOFEM::ConstructRightPart(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load)
 {
 	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
 	
@@ -810,7 +812,7 @@ void ISOFEMSOL::ConstructRightPart(std::function<Eigen::Vector2d(Eigen::RowVecto
 
 
 
-void ISOFEMSOL::ApplyingConstraints()
+void ISOFEM::ApplyingConstraints()
 {
 	auto &Bounds = MESH.Bounds();
 	std::vector<int> constraintIdx;
@@ -887,7 +889,7 @@ void ISOFEMSOL::ApplyingConstraints()
 			}
 }
 
-std::vector<int> ISOFEMSOL::UniqueNodes(const Eigen::MatrixXi &Elements)
+std::vector<int> ISOFEM::UniqueNodes(const Eigen::MatrixXi &Elements)
 {
 	std::vector<int> unique_arr; unique_arr.reserve(Elements.size());
 
@@ -904,7 +906,7 @@ std::vector<int> ISOFEMSOL::UniqueNodes(const Eigen::MatrixXi &Elements)
 	return unique_arr;
 }
 
-inline void ISOFEMSOL::ComputeB(const Eigen::MatrixXd &Ndx)
+inline void ISOFEM::ComputeB(const Eigen::MatrixXd &Ndx)
 {
 	for(int k = 0; k < NodesPerElement; ++k)
 		{
@@ -919,7 +921,7 @@ inline void ISOFEMSOL::ComputeB(const Eigen::MatrixXd &Ndx)
 }
 
 
-inline void ISOFEMSOL::ComputeKe(const int &NumberOfQP, const Eigen::RowVectorXd &Weights, const Eigen::MatrixXd &ElementNodesCoord, const std::vector<Eigen::MatrixXd> &NGradArr, Eigen::MatrixXd &Ndx)
+inline void ISOFEM::ComputeKe(const int &NumberOfQP, const Eigen::RowVectorXd &Weights, const Eigen::MatrixXd &ElementNodesCoord, const std::vector<Eigen::MatrixXd> &NGradArr, Eigen::MatrixXd &Ndx)
 {
 	for (int j = 0; j < NumberOfQP; ++j)
 	{
@@ -935,7 +937,7 @@ inline void ISOFEMSOL::ComputeKe(const int &NumberOfQP, const Eigen::RowVectorXd
 	Ke*=p1;
 }
 
-inline void ISOFEMSOL::AddKeToTriplet(std::vector<Triplet> &TripletList, const std::vector<int> &IdX)
+inline void ISOFEM::AddKeToTriplet(std::vector<Triplet> &TripletList, const std::vector<int> &IdX)
 {
 	for(int j = 0; j < NodesPerElement * 2; ++j)		
 		for(int k = 0; k < NodesPerElement * 2; ++k)
@@ -946,7 +948,7 @@ inline void ISOFEMSOL::AddKeToTriplet(std::vector<Triplet> &TripletList, const s
 
 }
 
-void ISOFEMSOL::ComputeStrains()
+void ISOFEM::ComputeStrains()
 {
 	
 	EpsiXX.resize(NumberOfNodes); EpsiXY.resize(NumberOfNodes); EpsiYY.resize(NumberOfNodes); 
@@ -1104,7 +1106,7 @@ void ISOFEMSOL::ComputeStrains()
 
 
 
-std::map<int, int> ISOFEMSOL::Counter(const Eigen::MatrixXi &Elements)
+std::map<int, int> ISOFEM::Counter(const Eigen::MatrixXi &Elements)
 {
 	std::vector<int> vals; vals.reserve(NodesPerElement*NumberOfElements);
 	
@@ -1123,7 +1125,7 @@ std::map<int, int> ISOFEMSOL::Counter(const Eigen::MatrixXi &Elements)
 
 
 
-void ISOFEMSOL::ComputeStress()
+void ISOFEM::ComputeStress()
 {
 	SigmaXX.resize(NumberOfNodes); SigmaYY.resize(NumberOfNodes); SigmaXY.resize(NumberOfNodes);
 	
@@ -1174,7 +1176,7 @@ void ISOFEMSOL::ComputeStress()
 }
 
 
-void ISOFEMSOL::ComputeStress(const JacArray &JacArr ,std::function<double(const double&, const double &)> phi)
+void ISOFEM::ComputeStress(const JacArray &JacArr ,std::function<double(const double&, const double &)> phi)
 {
 	SigmaXX.resize(NumberOfNodes); SigmaYY.resize(NumberOfNodes); SigmaXY.resize(NumberOfNodes);
 	
@@ -1373,7 +1375,7 @@ void ISOFEMSOL::ComputeStress(const JacArray &JacArr ,std::function<double(const
 }
 
 
-void ISOFEMSOL::WriteToVTK(std::string _filename)
+void ISOFEM::WriteToVTK(std::string _filename)
 {
 	
 	_filename.erase(_filename.end()-4, _filename.end());

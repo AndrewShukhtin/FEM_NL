@@ -1,6 +1,7 @@
 #include <iostream>
 #include "QuadratureUtils.h"
-#include "ISOFEMSOL.h"
+#include "ISOFEM.h"
+#include "FMMISOFEM.h"
 #include "MESH.h"
 
 
@@ -22,9 +23,9 @@ int main(int argc, char *argv[])
 	
 	if (argc == 2)
 	{
-		ISOFEMSOL Task(argv[1]);	
+		ISOFEM Task(argv[1]);	
 	
-		Task.Static_Analysis(Load);
+		Task.StaticAnalysis(Load);
 	}
 	
 	if(argc > 2)
@@ -58,15 +59,15 @@ int main(int argc, char *argv[])
 		
 			double L = std::stod(argv[4]);
 			
-			ISOFEMSOL Task(argv[1], p1, L);
+			FMMISOFEM Task(argv[1], p1, L);
 						
 			switch(N)
 			{
 				case 1:
-					Task.NonLocal_Static_Analysis(Load, phi1);
+					Task.FMMStaticAnalysis(Load, phi1);
 					break;
 				case 2:
-					Task.NonLocal_Static_Analysis(Load, phi2);
+					Task.FMMStaticAnalysis(Load, phi2);
 					break;
 				default:
 					break;
@@ -84,15 +85,15 @@ int main(int argc, char *argv[])
 		
 			int HighOrder = std::stoi(argv[5]);
 			
-			ISOFEMSOL Task(argv[1], p1, L, HighOrder);
+			ISOFEM Task(argv[1], p1, L, HighOrder);
 	
 			switch(N)
 			{
 				case 1:
-					Task.NonLocal_Static_Analysis(Load, phi1);
+					Task.NonLocalStaticAnalysis(Load, phi1);
 					break;
 				case 2:
-					Task.NonLocal_Static_Analysis(Load, phi2);
+					Task.NonLocalStaticAnalysis(Load, phi2);
 					break;
 				default:
 					break;

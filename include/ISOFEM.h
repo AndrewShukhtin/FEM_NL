@@ -1,5 +1,5 @@
-#ifndef __ISOFEMSOL_H__
-#define __ISOFEMSOL_H__
+#ifndef __ISOFEM_H__
+#define __ISOFEM_H__
 
 #include "MESH.h"
 #include "QuadratureUtils.h"
@@ -25,21 +25,22 @@ using JacArray = std::vector<std::vector<double>>;
 
 
 
-class ISOFEMSOL
+class ISOFEM
 {
 public:
-	ISOFEMSOL(std::string _filename);
+	ISOFEM(std::string _filename);
 	
-	ISOFEMSOL(std::string _filename, double _p1, double R);
+	ISOFEM(std::string _filename, double _p1, double R);
 	
-	ISOFEMSOL(std::string _filename, double _p1, double R, int _HighOrder);
+	ISOFEM(std::string _filename, double _p1, double R, int _HighOrder);
 	
-	void Static_Analysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load);
+	void StaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load);
 	
-	void NonLocal_Static_Analysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load, 
+	void NonLocalStaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load, 
 						std::function<double(const double &, const double &)> phi);
 	
-private:
+	
+protected:
 	
 	Eigen::SparseMatrix<double> K;
 	Eigen::MatrixXd	Ke,        // матирца жесткости элемента
@@ -48,7 +49,7 @@ private:
 	Eigen::VectorXd F;         // глобальный вектор правой части
 	Eigen::VectorXd Fe;        // вектор правой части элемента
 	Eigen::Matrix2d Jmatr;     // матрица Якоби в двумерном случае
-	Eigen::RowVector2d Jvec;   // матрица Якоби в одномернмо случае
+	Eigen::RowVector2d Jvec;   // матрица Якоби в одномернмом случае
 	Eigen::Matrix3d D;         // матрица Гука
 	
 	Eigen::VectorXd U;         // глобальный вектор Перемещений
@@ -84,7 +85,8 @@ private:
 	
 	inline void ComputeB(const Eigen::MatrixXd &Ndx);
 	
- 	inline void ComputeKe(const int &NumberOfQP, const Eigen::RowVectorXd &Weights, const Eigen::MatrixXd &ElementNodesCoord, const std::vector<Eigen::MatrixXd> &NGradArr, Eigen::MatrixXd &Ndx);
+ 	inline void ComputeKe(const int &NumberOfQP, const Eigen::RowVectorXd &Weights, const Eigen::MatrixXd &ElementNodesCoord,
+						  const std::vector<Eigen::MatrixXd> &NGradArr, Eigen::MatrixXd &Ndx);
 	
 	inline void AddKeToTriplet(std::vector<Triplet> &TripletList, const std::vector<int> &IdX);
 	
