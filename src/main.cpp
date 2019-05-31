@@ -59,34 +59,8 @@ int main(int argc, char *argv[])
 		
 			double L = std::stod(argv[4]);
 			
-			FMMISOFEM Task(argv[1], p1, L);
+			ISOFEM Task(argv[1], p1, L);
 						
-			switch(N)
-			{
-				case 1:
-					Task.FMMStaticAnalysis(Load, phi1);
-					break;
-				case 2:
-					Task.FMMStaticAnalysis(Load, phi2);
-					break;
-				default:
-					break;
-					
-			}
-		}
-		
-		if(argc == 6)
-		{	
-			int N = std::stoi(argv[2]);
-	
-			double p1 = std::stod(argv[3]);
-		
-			double L = std::stod(argv[4]);
-		
-			int HighOrder = std::stoi(argv[5]);
-			
-			ISOFEM Task(argv[1], p1, L, HighOrder);
-	
 			switch(N)
 			{
 				case 1:
@@ -100,7 +74,85 @@ int main(int argc, char *argv[])
 					
 			}
 		}
+		
+		if(argc == 6)
+		{
+			int N = std::stoi(argv[2]);
+	
+			double p1 = std::stod(argv[3]);
+		
+			double L = std::stod(argv[4]);
+			
+			std::string str = argv[5];
+			
+			if(str != "-fmm")
+			{	
+				int HighOrder = std::stoi(argv[5]);
+				
+				ISOFEM Task(argv[1], p1, L);
+							
+				switch(N)
+				{
+					case 1:
+						Task.NonLocalStaticAnalysis(Load, phi1);
+						break;
+					case 2:
+						Task.NonLocalStaticAnalysis(Load, phi2);
+						break;
+					default:
+						break;
+						
+				}
+			}else if(str == "-fmm")
+			{
+				FMMISOFEM Task(argv[1], p1, L);
+				
+				switch(N)
+				{
+					case 1:
+						Task.FMMStaticAnalysis(Load, phi1);
+						break;
+					case 2:
+						Task.FMMStaticAnalysis(Load, phi2);
+						break;
+					default:
+						break;
+				}
+				
+			}else
+			{
+				std::cout << "Error! Wrong paramaters!\n";
+			}
+		}
+		
+		if(argc == 7)
+		{	
+			int N = std::stoi(argv[2]);
+	
+			double p1 = std::stod(argv[3]);
+		
+			double L = std::stod(argv[4]);
+		
+			int HighOrder = std::stoi(argv[6]);
+			
+			FMMISOFEM Task(argv[1], p1, L, HighOrder);
+	
+			switch(N)
+			{
+				case 1:
+					Task.FMMStaticAnalysis(Load, phi1);
+					break;
+				case 2:
+					Task.FMMStaticAnalysis(Load, phi2);
+					break;
+				default:
+					break;
+					
+			}
+		}
+
 	
  	}
+ 	
 	return 0;
 }

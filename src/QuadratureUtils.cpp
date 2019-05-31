@@ -88,26 +88,27 @@ namespace FINITE_ELEMENT
 					double q = sqrt(0.6);
 					
 					_Weights.resize(9); 
-					_Weights(0) = 40.0/81.0;
-					_Weights(1) = 40.0/81.0;
-					_Weights(2) = 40.0/81.0;
-					_Weights(3) = 40.0/81.0;
-					_Weights(4) = 25.0/81.0;
-					_Weights(5) = 25.0/81.0;
-					_Weights(6) = 25.0/81.0;
-					_Weights(7) = 25.0/81.0;
+					_Weights(0) = 25.0/81.0;
+					_Weights(1) = 25.0/81.0;
+					_Weights(2) = 25.0/81.0;
+					_Weights(3) = 25.0/81.0;
+					_Weights(4) = 40.0/81.0;
+					_Weights(5) = 40.0/81.0;
+					_Weights(6) = 40.0/81.0;
+					_Weights(7) = 40.0/81.0;
 					_Weights(8) = 64.0/81.0;
 					
 					_QuadPoint.resize(9,2);
 					
-					_QuadPoint(0,0) =  -q;   _QuadPoint(0,1) = 0.0;
-					_QuadPoint(1,0) = 0.0;   _QuadPoint(1,1) =  -q;
-					_QuadPoint(2,0) =   q;   _QuadPoint(2,1) = 0.0;
-					_QuadPoint(3,0) = 0.0;   _QuadPoint(3,1) =   q;
-					_QuadPoint(4,0) =  -q;   _QuadPoint(4,1) =  -q;
-					_QuadPoint(5,0) =   q;   _QuadPoint(5,1) =  -q;
-					_QuadPoint(6,0) =   q;   _QuadPoint(6,1) =   q;
-					_QuadPoint(7,0) =  -q;   _QuadPoint(7,1) =   q;
+
+					_QuadPoint(0,0) =  -q;   _QuadPoint(0,1) =  -q;
+					_QuadPoint(1,0) =   q;   _QuadPoint(1,1) =  -q;
+					_QuadPoint(2,0) =   q;   _QuadPoint(2,1) =   q;
+					_QuadPoint(3,0) =  -q;   _QuadPoint(3,1) =   q;
+					_QuadPoint(4,0) =  -q;   _QuadPoint(4,1) = 0.0;
+					_QuadPoint(5,0) = 0.0;   _QuadPoint(5,1) =  -q;
+					_QuadPoint(6,0) =   q;   _QuadPoint(6,1) = 0.0;
+					_QuadPoint(7,0) = 0.0;   _QuadPoint(7,1) =   q;
 					_QuadPoint(8,0) = 0.0;   _QuadPoint(8,1) = 0.0;
 					break;
 				}

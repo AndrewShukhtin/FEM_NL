@@ -158,8 +158,8 @@ void ISOFEM::StaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)>
               << std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
               << " milliseconds\n";
 			  
-	Eigen::ConjugateGradient<Eigen::SparseMatrix<double>, Eigen::Lower> Solver;
-	
+	//Eigen::ConjugateGradient<Eigen::SparseMatrix<double>, Eigen::Lower> Solver;
+	Eigen::ConjugateGradient<Eigen::SparseMatrix<double>, Eigen::Lower, Eigen::IdentityPreconditioner>Solver;
 	//std::cout << "\nK\n:" << K << std::endl;
 	
 	Solver.compute(K);	
@@ -171,7 +171,10 @@ void ISOFEM::StaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)>
 	std::cout << "System solve time = "
               << std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
               << " milliseconds\n";
-	
+	std::cout << "+++++++++++++++++++++++++++++++++++++" <<std::endl;
+	std::cout << "+ #iterations:     | " << Solver.iterations() << "            +" <<std::endl;
+	std::cout << "+ Estimated error: | " << Solver.error()   << "    +"  << std::endl;		
+	std::cout << "+++++++++++++++++++++++++++++++++++++" <<std::endl;	
 	
 	t1 = std::chrono::high_resolution_clock::now();
 	cN = Counter(MESH.Elements());
@@ -187,6 +190,13 @@ void ISOFEM::StaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)>
 	std::cout << "ComputeStress time = "
               << std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
               << " milliseconds\n";
+			  
+	t1 = std::chrono::high_resolution_clock::now();
+	DeformationEnergy = U.transpose() * K.selfadjointView<Eigen::Lower>() * U;
+	t2 = std::chrono::high_resolution_clock::now();
+	std::cout << "Compute DeformationEnergy time = "
+				<< std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
+				<< " milliseconds\n";
 	
 	t1 = std::chrono::high_resolution_clock::now();
 	WriteToVTK(MESH.FileName());
@@ -203,8 +213,7 @@ void ISOFEM::StaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)>
 
 };
 
-void ISOFEM::NonLocalStaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load, 
-		std::function<double(const double &, const double &)> phi)
+void ISOFEM::NonLocalStaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load, std::function<double(const double &, const double &)> phi)
 {
 	auto T1 = std::chrono::high_resolution_clock::now();
 	
@@ -250,7 +259,8 @@ void ISOFEM::NonLocalStaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVect
 				<< std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
 				<< " milliseconds\n";
 				
-		Eigen::ConjugateGradient<Eigen::SparseMatrix<double>,Eigen::Lower> Solver;
+		
+    Eigen::ConjugateGradient<Eigen::SparseMatrix<double>, Eigen::Lower, Eigen::IdentityPreconditioner>Solver;
 		
 		Solver.compute(K);	
 		
@@ -260,8 +270,10 @@ void ISOFEM::NonLocalStaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVect
 		std::cout << "System solve time = "
 				<< std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
 				<< " milliseconds\n";
-		
-	// 	std::cout <<"\nU:\n"<< U <<std::endl;
+		std::cout << "+++++++++++++++++++++++++++++++++++++" <<std::endl;
+		std::cout << "+ #iterations:     | " << Solver.iterations() << "            +" <<std::endl;
+		std::cout << "+ Estimated error: | " << Solver.error()   << "    +"  << std::endl;		
+		std::cout << "+++++++++++++++++++++++++++++++++++++" <<std::endl;	
 		
 		t1 = std::chrono::high_resolution_clock::now();
 		cN = Counter(MESH.Elements());
@@ -272,12 +284,19 @@ void ISOFEM::NonLocalStaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVect
 				<< " milliseconds\n";
 		
 		t1 = std::chrono::high_resolution_clock::now();
-		ComputeStress(JacArr,phi);
+		ComputeStress(JacArr, NdxArr, phi);
 		t2 = std::chrono::high_resolution_clock::now();
 		std::cout << "ComputeStress time = "
 				<< std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
 				<< " milliseconds\n";
 	}
+	
+	t1 = std::chrono::high_resolution_clock::now();
+	DeformationEnergy = U.transpose() * K.selfadjointView<Eigen::Lower>() * U;
+	t2 = std::chrono::high_resolution_clock::now();
+			std::cout << "Compute DeformationEnergy time = "
+				<< std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
+				<< " milliseconds\n";
 	
 	t1 = std::chrono::high_resolution_clock::now();
 	WriteToVTK(MESH.FileName());
@@ -292,6 +311,7 @@ void ISOFEM::NonLocalStaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVect
               << std::chrono::duration_cast<std::chrono::seconds>(T2-T1).count()
               << " seconds\n\n";
 }
+
 
 
 void ISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList)
@@ -376,13 +396,12 @@ void ISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList)
 }
 
 
+
 void ISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList, NdxArray &NdxArr, JArray &JArr, JacArray &JacArr)
 {
 	
-	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
-	
-	unsigned Order;
-	
+	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;	
+	unsigned Order;	
 	switch (MESH.NodesPerElement())
 	{
 		case 4: 
@@ -397,111 +416,172 @@ void ISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList, NdxArray &Ndx
 			pFE.reset(new FINITE_ELEMENT::QuadraticSerendipElement);
 			break;
 		}
-	}
-	
-	NodesPerElement = pFE->NodesPerElement();
-	
+	}	
+	NodesPerElement = pFE->NodesPerElement();	
 	NumberOfElements = MESH.NumberOfElements();
-	
-	
 	const FINITE_ELEMENT::QuadratureUtils QuadUtil(pFE.get(),Order);
 	
+	if(HighOrder!=-1) Order = HighOrder;
 	
-	K.resize(NumberOfNodes * 2, NumberOfNodes * 2);
+	const FINITE_ELEMENT::QuadratureUtils QuadUtilNL(pFE.get(),Order);	
 	
+	
+	K.resize(NumberOfNodes * 2, NumberOfNodes * 2);	
 	Ke.resize(NodesPerElement * 2, NodesPerElement * 2);
-	
-	
-	Eigen::MatrixXd Ndx = Eigen::MatrixXd::Zero(2, NodesPerElement); // производные функции форм в глобаной ск
-	
-	Eigen::RowVectorXi ElementNodesNumbers(NodesPerElement);
-	
 	BT = Eigen::MatrixXd::Zero(NodesPerElement * 2, 3);
-	
 	B = Eigen::MatrixXd::Zero(3, NodesPerElement * 2);
 	
 	
-	int NumberOfTriplets = 0;
+	Eigen::MatrixXd Ndx = Eigen::MatrixXd::Zero(2, NodesPerElement); // производные функции форм в глобаной ск	
+	Eigen::RowVectorXi ElementNodesNumbers(NodesPerElement);
 	
-	NaiveRnnSearch(RnnArr,L);
-		
+
+	int NumberOfTriplets = 0;	
+	NaiveRnnSearch(RnnArr,L);		
 	NumberOfTriplets = NumberOfElements * 4 * NodesPerElement * NodesPerElement;
-		
 	for (size_t ei = 0; ei < NumberOfElements; ++ei)
 	{
 		NumberOfTriplets += RnnArr[ei].size() * 4 * NodesPerElement * NodesPerElement;
 	}
-
-	const auto NumberOfQP = QuadUtil.NumberOfQP();
-	
 	TripletList.reserve(NumberOfTriplets);
+	
 	
 	Eigen::MatrixXd ElementNodesCoord(NodesPerElement, 2);
 	
+
 	const auto &Nodes = MESH.Nodes();
-	const auto &Elements = MESH.Elements();
+	const auto &Elements = MESH.Elements();	
 	
+	const auto NumberOfQP = QuadUtil.NumberOfQP();	
 	const auto &Narr = QuadUtil.Narr();
-	const auto &NGradArr = QuadUtil.NGradArr();
-	
+	const auto &NGradArr = QuadUtil.NGradArr();	
 	const auto &Weights = QuadUtil.Weights();
 	
 	double Jac = 0.0;
-	
 
 	std::vector<int> IdX(NodesPerElement * 2);
 	
-	for(size_t e = 0; e < NumberOfElements; ++e)
-	{
-		ElementNodesNumbers = Elements.row(e);
-		
-		Ke = Eigen::MatrixXd::Zero(NodesPerElement * 2, NodesPerElement * 2);
-		
-		NdxArr[e].resize(NumberOfQP);
-		JArr[e].resize(NumberOfQP);
-		JacArr[e].resize(NumberOfQP);
-		
-		for(size_t j = 0; j < NodesPerElement; ++j)
-		{		
-			ElementNodesCoord.row(j) = Nodes.row(ElementNodesNumbers(j));
-			IdX[j * 2] = ElementNodesNumbers(j) * 2;
-			IdX[j * 2 + 1] = ElementNodesNumbers(j) * 2 + 1; 
-		}	
-		
-
-		for (size_t q = 0; q < NumberOfQP; ++q)
+	if(HighOrder == -1)
+	{	
+		for(size_t e = 0; e < NumberOfElements; ++e)
 		{
-			Jmatr = NGradArr[q] * ElementNodesCoord;
+			ElementNodesNumbers = Elements.row(e);
 			
-			JArr[e][q] = Jmatr;
+			Ke = Eigen::MatrixXd::Zero(NodesPerElement * 2, NodesPerElement * 2);
 			
-			Ndx = Jmatr.inverse() * NGradArr[q];
+			NdxArr[e].resize(NumberOfQP);
+			JArr[e].resize(NumberOfQP);
+			JacArr[e].resize(NumberOfQP);
 			
-			NdxArr[e][q] = Ndx;
+			for(size_t j = 0; j < NodesPerElement; ++j)
+			{		
+				ElementNodesCoord.row(j) = Nodes.row(ElementNodesNumbers(j));
+				IdX[j * 2] = ElementNodesNumbers(j) * 2;
+				IdX[j * 2 + 1] = ElementNodesNumbers(j) * 2 + 1; 
+			}	
 			
-			Jac = Jmatr.determinant();
-			
-			JacArr[e][q] = Jac;
-			
-			ComputeB(Ndx);
-		
-			Ke += Weights(q) * BT * D * B * Jac;
-		}
-	
-		Ke*=p1;
 
-		for(size_t j = 0; j < NodesPerElement * 2; ++j)		
-			for(size_t k = 0; k < NodesPerElement * 2; ++k)
+			for (size_t q = 0; q < NumberOfQP; ++q)
 			{
-				if(IdX[k] <= IdX[j])
-				TripletList.push_back(Triplet(IdX[j], IdX[k], Ke(j, k)));
+				Jmatr = NGradArr[q] * ElementNodesCoord;
+				
+				JArr[e][q] = Jmatr;
+				
+				Ndx = Jmatr.inverse() * NGradArr[q];
+				
+				NdxArr[e][q] = Ndx;
+				
+				Jac = Jmatr.determinant();
+				
+				JacArr[e][q] = Jac;
+				
+				ComputeB(Ndx);
+			
+				Ke += Weights(q) * BT * D * B * Jac;
 			}
+		
+			Ke*=p1;
+
+			for(size_t j = 0; j < NodesPerElement * 2; ++j)		
+				for(size_t k = 0; k < NodesPerElement * 2; ++k)
+				{
+					if(IdX[k] <= IdX[j])
+					TripletList.push_back(Triplet(IdX[j], IdX[k], Ke(j, k)));
+				}
+		}
+	}
+	else
+	{
+		Order = HighOrder;
+		const FINITE_ELEMENT::QuadratureUtils QuadUtilNL(pFE.get(),Order);
+		
+		const auto NumberOfQPNL = QuadUtilNL.NumberOfQP();	
+		const auto &NarrNL = QuadUtilNL.Narr();
+		const auto &NGradArrNL = QuadUtilNL.NGradArr();	
+		const auto &WeightsNL = QuadUtilNL.Weights();
+		
+		for(size_t e = 0; e < NumberOfElements; ++e)
+		{
+			ElementNodesNumbers = Elements.row(e);
+			
+			Ke = Eigen::MatrixXd::Zero(NodesPerElement * 2, NodesPerElement * 2);
+			
+			NdxArr[e].resize(NumberOfQPNL);
+			JArr[e].resize(NumberOfQPNL);
+			JacArr[e].resize(NumberOfQPNL);
+			
+			for(size_t j = 0; j < NodesPerElement; ++j)
+			{		
+				ElementNodesCoord.row(j) = Nodes.row(ElementNodesNumbers(j));
+				IdX[j * 2] = ElementNodesNumbers(j) * 2;
+				IdX[j * 2 + 1] = ElementNodesNumbers(j) * 2 + 1; 
+			}	
+			
+
+			for (size_t q = 0; q < NumberOfQP; ++q)
+			{
+				Jmatr = NGradArr[q] * ElementNodesCoord;
+				
+				Ndx = Jmatr.inverse() * NGradArr[q];
+				
+				Jac = Jmatr.determinant();
+				
+				ComputeB(Ndx);
+			
+				Ke += Weights(q) * BT * D * B * Jac;
+			}
+			
+			for (size_t q = 0; q < NumberOfQPNL; ++q)
+			{
+				Jmatr = NGradArrNL[q] * ElementNodesCoord;
+				
+				JArr[e][q] = Jmatr;
+				
+				Ndx = Jmatr.inverse() * NGradArrNL[q];
+				
+				NdxArr[e][q] = Ndx;
+				
+				Jac = Jmatr.determinant();
+				
+				JacArr[e][q] = Jac;
+			}
+		
+			Ke*=p1;
+
+			for(size_t j = 0; j < NodesPerElement * 2; ++j)		
+				for(size_t k = 0; k < NodesPerElement * 2; ++k)
+				{
+					if(IdX[k] <= IdX[j])
+					TripletList.push_back(Triplet(IdX[j], IdX[k], Ke(j, k)));
+				}
+		}
 	}
 }
 
 
-void ISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList, const NdxArray &NdxArr, const JArray &JArr, const JacArray &JacArr, 
-								   std::function<double(const double &, const double &)> phi)
+
+
+void ISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList, const NdxArray &NdxArr, const JArray &JArr, const JacArray &JacArr, std::function<double(const double &, const double &)> phi)
 {
 	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
 	
@@ -701,14 +781,18 @@ void ISOFEM::NaiveRnnSearch(std::vector<std::vector<int>> &RnnArr, const double 
 			distV = COE.row(ei) - COE.row(ej);
 			dist = distV.norm();
 			
-			if (dist <= 1.05 * L)
+			if (dist <= 1.06 * L)
 				RnnArr[ei].push_back(ej);
 		}
 		RnnArr[ei].shrink_to_fit();
 	}
 	
+}
 
 
+const double &ISOFEM::SystemEnergy() const
+{
+	return DeformationEnergy;
 }
 
 
@@ -948,43 +1032,28 @@ inline void ISOFEM::AddKeToTriplet(std::vector<Triplet> &TripletList, const std:
 
 }
 
+std::map<int, int> ISOFEM::Counter(const Eigen::MatrixXi &Elements)
+{
+	std::vector<int> vals; vals.reserve(NodesPerElement*NumberOfElements);
+	
+	for(size_t i = 0; i < NumberOfElements; ++i)
+		for(size_t j = 0; j < NodesPerElement; ++j)
+			vals.push_back(Elements(i,j));
+	
+	vals.shrink_to_fit();
+	std::map<int, int> rv;
+
+    for (auto val = vals.begin(); val != vals.end(); ++val) 
+		rv[*val]++;
+
+	return rv;
+}
+
+
 void ISOFEM::ComputeStrains()
 {
-	
-	EpsiXX.resize(NumberOfNodes); EpsiXY.resize(NumberOfNodes); EpsiYY.resize(NumberOfNodes); 
-	
-	
-	EpsiXX =  Eigen::VectorXd::Zero(NumberOfNodes);
-	EpsiXY =  Eigen::VectorXd::Zero(NumberOfNodes);
-	EpsiYY =  Eigen::VectorXd::Zero(NumberOfNodes);
-	
-	
-	Eigen::VectorXd EpsiXX_Element = Eigen::VectorXd::Zero(NodesPerElement);
-
-	Eigen::VectorXd EpsiYY_Element = Eigen::VectorXd::Zero(NodesPerElement);	
-	
-	Eigen::VectorXd EpsiXY_Element = Eigen::VectorXd::Zero(NodesPerElement);	
-	
-	
-	
-	Eigen::VectorXd EpsiXX_QP = Eigen::VectorXd::Zero(NodesPerElement);
-
-	Eigen::VectorXd EpsiYY_QP = Eigen::VectorXd::Zero(NodesPerElement);	
-	
-	Eigen::VectorXd EpsiXY_QP = Eigen::VectorXd::Zero(NodesPerElement);
-	
-	
-	
-	Eigen::VectorXd Ue =  Eigen::VectorXd::Zero(NodesPerElement * 2);
-	
-	Eigen::VectorXd Epsi =  Eigen::VectorXd::Zero(3);
-	
-	
-	
 	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
-	
 	unsigned Order;
-	
 	switch (MESH.NodesPerElement())
 	{
 		case 4:
@@ -1000,67 +1069,70 @@ void ISOFEM::ComputeStrains()
 			break;
 		}
 	}
-	
 	const FINITE_ELEMENT::QuadratureUtils QuadUtil(pFE.get(), Order);
 	
-	Eigen::MatrixXd NQP(NodesPerElement,NodesPerElement);
 	
+	EpsiXX =  Eigen::VectorXd::Zero(NumberOfNodes);
+	EpsiXY =  Eigen::VectorXd::Zero(NumberOfNodes);
+	EpsiYY =  Eigen::VectorXd::Zero(NumberOfNodes);
+	
+	
+	Eigen::VectorXd EpsiXX_Element = Eigen::VectorXd::Zero(NodesPerElement);
+	Eigen::VectorXd EpsiYY_Element = Eigen::VectorXd::Zero(NodesPerElement);	
+	Eigen::VectorXd EpsiXY_Element = Eigen::VectorXd::Zero(NodesPerElement);	
+	
+	
+	Eigen::VectorXd EpsiXX_QP = Eigen::VectorXd::Zero(NodesPerElement);
+	Eigen::VectorXd EpsiYY_QP = Eigen::VectorXd::Zero(NodesPerElement);	
+	Eigen::VectorXd EpsiXY_QP = Eigen::VectorXd::Zero(NodesPerElement);
+	
+	
+	Eigen::VectorXd Ue =  Eigen::VectorXd::Zero(NodesPerElement * 2);
+	Eigen::VectorXd Epsi =  Eigen::VectorXd::Zero(3);
+	
+
 	NodesPerElement = pFE->NodesPerElement();
-	
 	Eigen::MatrixXd Ndx(2, NodesPerElement);
-	
 	Eigen::MatrixXd ElementNodesCoord(NodesPerElement, 2);
-	
 	Eigen::RowVectorXi ElementNodesNumbers(NodesPerElement);
-	
-	
 	
 	
 	const auto &Nodes = MESH.Nodes();
 	const auto &Elements = MESH.Elements();
-	
 	const auto &Narr = QuadUtil.Narr();
 	const auto &NGradArr = QuadUtil.NGradArr();
-	
 	const auto &Weights = QuadUtil.Weights();
 	
 	
+	Eigen::MatrixXd NQP(NodesPerElement,NodesPerElement);
 	for(int q = 0; q < NodesPerElement; ++q)
 		NQP.row(q) =  Narr[q];
-	
-
-	
 	Eigen::MatrixXd b = Eigen::MatrixXd::Identity(NodesPerElement,NodesPerElement);
-	
 	Eigen::MatrixXd NQPI = NQP.fullPivLu().solve(b);
 	
 	
-	
-	for(int e = 0; e < NumberOfElements; ++e)
+	for(size_t e = 0; e < NumberOfElements; ++e)
 	{		
 		B = Eigen::MatrixXd::Zero(3, NodesPerElement * 2);
 		
 		ElementNodesNumbers = Elements.row(e);
 		
 		
-		for(int j = 0; j < NodesPerElement; ++j)
+		for(size_t j = 0; j < NodesPerElement; ++j)
 		{
+			ElementNodesCoord.row(j) = Nodes.row(ElementNodesNumbers(j));
 			Ue(j * 2) = U(ElementNodesNumbers(j) * 2);
 			Ue(j * 2 + 1) = U(ElementNodesNumbers(j) * 2 + 1);
 		}
 			
 		
-		for(int j = 0; j < NodesPerElement; ++j)		
-			ElementNodesCoord.row(j) = Nodes.row(ElementNodesNumbers(j));
-		
-		
-		for (int j = 0; j < NodesPerElement; ++j)
+		for (size_t j = 0; j < NodesPerElement; ++j)
 		{
 			Jmatr = NGradArr[j] * ElementNodesCoord;
 			
 			Ndx = Jmatr.inverse() * NGradArr[j];
 			
-			for(int k = 0; k < NodesPerElement; ++k)
+			for(size_t k = 0; k < NodesPerElement; ++k)
 			{
 				B(0, k * 2) = Ndx(0, k);
 				B(1, k * 2 + 1) = Ndx(1, k);
@@ -1072,15 +1144,13 @@ void ISOFEM::ComputeStrains()
 			EpsiXX_QP(j) = Epsi(0);
 			EpsiYY_QP(j) = Epsi(1);
 			EpsiXY_QP(j) = Epsi(2);
-			
-			
 		}	
 		
 		EpsiXX_Element = NQPI * EpsiXX_QP;
 		EpsiYY_Element = NQPI * EpsiYY_QP;
 		EpsiXY_Element = 0.5 * NQPI * EpsiXY_QP;
 		
-		for (int j = 0; j < NodesPerElement; ++j)
+		for (size_t j = 0; j < NodesPerElement; ++j)
 		{
 			
 			EpsiXX(ElementNodesNumbers(j)) += EpsiXX_Element(j);
@@ -1106,92 +1176,11 @@ void ISOFEM::ComputeStrains()
 
 
 
-std::map<int, int> ISOFEM::Counter(const Eigen::MatrixXi &Elements)
-{
-	std::vector<int> vals; vals.reserve(NodesPerElement*NumberOfElements);
-	
-	for(size_t i = 0; i < NumberOfElements; ++i)
-		for(size_t j = 0; j < NodesPerElement; ++j)
-			vals.push_back(Elements(i,j));
-	
-	vals.shrink_to_fit();
-	std::map<int, int> rv;
-
-    for (auto val = vals.begin(); val != vals.end(); ++val) 
-		rv[*val]++;
-
-	return rv;
-}
-
-
 
 void ISOFEM::ComputeStress()
 {
-	SigmaXX.resize(NumberOfNodes); SigmaYY.resize(NumberOfNodes); SigmaXY.resize(NumberOfNodes);
-	
-	SigmaXX =  Eigen::VectorXd::Zero(NumberOfNodes);
-	SigmaXY =  Eigen::VectorXd::Zero(NumberOfNodes);
-	SigmaYY =  Eigen::VectorXd::Zero(NumberOfNodes);
-	SigmaVM =  Eigen::VectorXd::Zero(NumberOfNodes);
-	
-	Eigen::VectorXd Sigma =  Eigen::VectorXd::Zero(3);
-	Eigen::VectorXd Epsi  =  Eigen::VectorXd::Zero(3);
-	
-	Eigen::RowVectorXi ElementNodesNumbers(NodesPerElement);
-	
-	const auto &Elements = MESH.Elements();
-	
-	for(size_t e = 0; e < NumberOfElements; ++e)
-	{		
-		ElementNodesNumbers = Elements.row(e);
-		
-		for (size_t j = 0; j < NodesPerElement; ++j)
-		{
-			
-			Epsi(0) = EpsiXX(ElementNodesNumbers(j));
-			Epsi(1) = EpsiYY(ElementNodesNumbers(j));
-			Epsi(2) = EpsiXY(ElementNodesNumbers(j));
-			
-			Sigma = p1 * D * Epsi;
-			
-			SigmaXX(ElementNodesNumbers(j)) += Sigma(0);
-			SigmaYY(ElementNodesNumbers(j)) += Sigma(1);
-			SigmaXY(ElementNodesNumbers(j)) += 0.5*Sigma(2);
-			
-		}	
-		
-		
-	}	
-	
-	
-	for (auto count = cN.begin(); count != cN.end(); ++count) 
-	{		
-		SigmaXX(count->first)/=count->second;
-		SigmaXY(count->first)/=count->second;
-		SigmaYY(count->first)/=count->second;
-	}
-	
-	for(size_t i = 0; i < NumberOfNodes; ++i)
-		SigmaVM(i) = sqrt(SigmaXX[i] * SigmaXX[i] + SigmaYY[i] * SigmaYY[i] - SigmaXX[i] * SigmaYY[i] + 3.0 * SigmaXY[i] * SigmaXY[i]);
-}
-
-
-void ISOFEM::ComputeStress(const JacArray &JacArr ,std::function<double(const double&, const double &)> phi)
-{
-	SigmaXX.resize(NumberOfNodes); SigmaYY.resize(NumberOfNodes); SigmaXY.resize(NumberOfNodes);
-	
-	SigmaXX =  Eigen::VectorXd::Zero(NumberOfNodes);
-	SigmaXY =  Eigen::VectorXd::Zero(NumberOfNodes);
-	SigmaYY =  Eigen::VectorXd::Zero(NumberOfNodes);
-	SigmaVM =  Eigen::VectorXd::Zero(NumberOfNodes);
-	
-	Eigen::VectorXd Sigma =  Eigen::VectorXd::Zero(3);
-	Eigen::VectorXd Epsi  =  Eigen::VectorXd::Zero(3);
-	
 	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
-	
 	unsigned Order;
-	
 	switch (MESH.NodesPerElement())
 	{
 		case 4: 
@@ -1207,119 +1196,287 @@ void ISOFEM::ComputeStress(const JacArray &JacArr ,std::function<double(const do
 			break;
 		}
 	}
-	
-	if(HighOrder!=-1) Order = HighOrder;
-	
 	const FINITE_ELEMENT::QuadratureUtils QuadUtil(pFE.get(), Order);
 	
 	
-	NodesPerElement = pFE->NodesPerElement();
+	SigmaXX =  Eigen::VectorXd::Zero(NumberOfNodes);
+	SigmaYY =  Eigen::VectorXd::Zero(NumberOfNodes);
+	SigmaXY =  Eigen::VectorXd::Zero(NumberOfNodes);
+	SigmaVM =  Eigen::VectorXd::Zero(NumberOfNodes);
 	
-	NumberOfElements = MESH.NumberOfElements();
+	
+	Eigen::VectorXd SigmaXX_QP =  Eigen::VectorXd::Zero(NodesPerElement);
+	Eigen::VectorXd SigmaYY_QP =  Eigen::VectorXd::Zero(NodesPerElement);
+	Eigen::VectorXd SigmaXY_QP =  Eigen::VectorXd::Zero(NodesPerElement);
+	
+	Eigen::VectorXd SigmaXX_Element =  Eigen::VectorXd::Zero(NodesPerElement);
+	Eigen::VectorXd SigmaXY_Element =  Eigen::VectorXd::Zero(NodesPerElement);
+	Eigen::VectorXd SigmaYY_Element =  Eigen::VectorXd::Zero(NodesPerElement);	
+	
+	Eigen::VectorXd Sigma =  Eigen::VectorXd::Zero(3);
+	Eigen::VectorXd Epsi  =  Eigen::VectorXd::Zero(3);
+	
+	
+	Eigen::VectorXd Ue =  Eigen::VectorXd::Zero(NodesPerElement * 2);
+	
+	
+	Eigen::RowVectorXi ElementNodesNumbers(NodesPerElement);
+	Eigen::MatrixXd ElementNodesCoord(NodesPerElement, 2);
+	Eigen::MatrixXd Ndx = Eigen::MatrixXd::Zero(2, NodesPerElement);
+	
+	
+	const auto &Nodes = MESH.Nodes();
+	const auto &Elements = MESH.Elements();
+	const auto &Narr = QuadUtil.Narr();
+	const auto &NGradArr = QuadUtil.NGradArr();
+	const auto &Weights = QuadUtil.Weights();
+	
 	
 	Eigen::MatrixXd NQP(NodesPerElement,NodesPerElement);
+	for(int q = 0; q < NodesPerElement; ++q)
+		NQP.row(q) =  Narr[q];
+	Eigen::MatrixXd b = Eigen::MatrixXd::Identity(NodesPerElement,NodesPerElement);
+	Eigen::MatrixXd NQPI = NQP.fullPivLu().solve(b);
 	
+	
+	for(size_t e = 0; e < NumberOfElements; ++e)
+	{		
+		ElementNodesNumbers = Elements.row(e);
+						
+		for(size_t j = 0; j < NodesPerElement; ++j)
+		{
+			ElementNodesCoord.row(j) = Nodes.row(ElementNodesNumbers(j));
+			Ue(j * 2) = U(ElementNodesNumbers(j) * 2);
+			Ue(j * 2 + 1) = U(ElementNodesNumbers(j) * 2 + 1);
+		}
 		
-	Eigen::VectorXd EpsiXX_Element = Eigen::VectorXd::Zero(NodesPerElement);
+		for (size_t q = 0; q < NodesPerElement; ++q)
+		{
+			Jmatr = NGradArr[q] * ElementNodesCoord;
+			
+			Ndx = Jmatr.inverse() * NGradArr[q];			
+			
+			for(size_t k = 0; k < NodesPerElement; ++k)
+			{
+				B(0, k * 2) = Ndx(0, k);
+				B(1, k * 2 + 1) = Ndx(1, k);
+				B(2, k * 2) = Ndx(1, k);    B(2, k * 2 + 1) = Ndx(0, k);
+			}
+			
+			
+			Epsi =  B * Ue;
+			
+			Epsi(2) *= 0.5;
+			
+			Sigma = D * Epsi;
+			
+			SigmaXX_QP(q) = Sigma(0);
+			SigmaYY_QP(q) = Sigma(1);
+			SigmaXY_QP(q) = Sigma(2);
+			
+		}	
+		
+		SigmaXX_Element = NQPI * SigmaXX_QP;
+		SigmaYY_Element = NQPI * SigmaYY_QP;
+		SigmaXY_Element = NQPI * SigmaXY_QP;
 
-	Eigen::VectorXd EpsiYY_Element = Eigen::VectorXd::Zero(NodesPerElement);	
+		
+		for (size_t j = 0; j < NodesPerElement; ++j)
+		{
+			
+			SigmaXX(ElementNodesNumbers(j)) += SigmaXX_Element(j);
+			SigmaYY(ElementNodesNumbers(j)) += SigmaYY_Element(j);
+			SigmaXY(ElementNodesNumbers(j)) += SigmaXY_Element(j);
+			
+		}
+		
+	}	
 	
-	Eigen::VectorXd EpsiXY_Element = Eigen::VectorXd::Zero(NodesPerElement);	
+	for (auto count = cN.begin(); count != cN.end(); ++count) 
+	{		
+		SigmaXX(count->first)/=count->second;
+		SigmaXY(count->first)/=count->second;
+		SigmaYY(count->first)/=count->second;
+	}
 	
-	
-	Eigen::VectorXd SigmaXX_Element = Eigen::VectorXd::Zero(NodesPerElement);
+	for(size_t i = 0; i < NumberOfNodes; ++i)
+		SigmaVM(i) = sqrt(SigmaXX[i] * SigmaXX[i] + SigmaYY[i] * SigmaYY[i] - SigmaXX[i] * SigmaYY[i] + 3.0 * SigmaXY[i] * SigmaXY[i]);
+}
 
-	Eigen::VectorXd SigmaYY_Element = Eigen::VectorXd::Zero(NodesPerElement);	
-	
-	Eigen::VectorXd SigmaXY_Element = Eigen::VectorXd::Zero(NodesPerElement);	
-	
-	
-	Eigen::VectorXd SigmaXX_QP = Eigen::VectorXd::Zero(NodesPerElement);
 
-	Eigen::VectorXd SigmaYY_QP = Eigen::VectorXd::Zero(NodesPerElement);	
-	
-	Eigen::VectorXd SigmaXY_QP = Eigen::VectorXd::Zero(NodesPerElement);
 
+
+void ISOFEM::ComputeStress(const JacArray &JacArr, const NdxArray &NdxArr, std::function<double(const double&, const double &)> phi)
+{	
+	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
+	unsigned Order;	
+	switch (MESH.NodesPerElement())
+	{
+		case 4: 
+		{
+			pFE.reset(new FINITE_ELEMENT::BilinearElement);
+			Order = 3;
+			break;
+		}
+		case 8:
+		{
+			pFE.reset(new FINITE_ELEMENT::QuadraticSerendipElement);
+			Order = 5;
+			break;
+		}
+	}	
+	if(HighOrder!=-1) Order = HighOrder;	
+	const FINITE_ELEMENT::QuadratureUtils QuadUtil(pFE.get(), Order);
 	
+	
+	SigmaXX =  Eigen::VectorXd::Zero(NumberOfNodes);
+	SigmaXY =  Eigen::VectorXd::Zero(NumberOfNodes);
+	SigmaYY =  Eigen::VectorXd::Zero(NumberOfNodes);
+	SigmaVM =  Eigen::VectorXd::Zero(NumberOfNodes);
+	
+	
+	Eigen::VectorXd SigmaXX_QP =  Eigen::VectorXd::Zero(NodesPerElement);
+	Eigen::VectorXd SigmaXY_QP =  Eigen::VectorXd::Zero(NodesPerElement);
+	Eigen::VectorXd SigmaYY_QP =  Eigen::VectorXd::Zero(NodesPerElement);
+	
+	Eigen::VectorXd SigmaXX_Element =  Eigen::VectorXd::Zero(NodesPerElement);
+	Eigen::VectorXd SigmaXY_Element =  Eigen::VectorXd::Zero(NodesPerElement);
+	Eigen::VectorXd SigmaYY_Element =  Eigen::VectorXd::Zero(NodesPerElement);
+	
+	Eigen::VectorXd EpsiXX_QP = Eigen::VectorXd::Zero(NodesPerElement);
+	Eigen::VectorXd EpsiYY_QP = Eigen::VectorXd::Zero(NodesPerElement);	
+	Eigen::VectorXd EpsiXY_QP = Eigen::VectorXd::Zero(NodesPerElement);	
+	
+	
+	Eigen::VectorXd Sigma =  Eigen::VectorXd::Zero(3);
+	Eigen::VectorXd Epsi  =  Eigen::VectorXd::Zero(3);
+	Eigen::VectorXd Ue =  Eigen::VectorXd::Zero(NodesPerElement * 2);
+	
+
 	Eigen::RowVectorXi ElementNodesNumbersi(NodesPerElement);
 	Eigen::RowVectorXi ElementNodesNumbersj(NodesPerElement);
 		
 	Eigen::MatrixXd ElementNodesCoordi(NodesPerElement, 2);
 	Eigen::MatrixXd ElementNodesCoordj(NodesPerElement, 2);
 	
-	Eigen::RowVector2d X, Y, R;
 	
+	Eigen::RowVector2d X, Y, R;
 	double r;
 	
+	
 	const auto &Nodes = MESH.Nodes();
-	const auto &Elements = MESH.Elements();
-	
+	const auto &Elements = MESH.Elements();	
 	const auto &Narr = QuadUtil.Narr();
-	const auto &NGradArr = QuadUtil.NGradArr();
+	const auto &NGradArr = QuadUtil.NGradArr();	
+	const auto &Weights = QuadUtil.Weights();	
+	const auto NumberOfQP = QuadUtil.NumberOfQP();
 	
-	const auto &Weights = QuadUtil.Weights();
 	
-
+	Eigen::MatrixXd Ndx = Eigen::MatrixXd::Zero(2, NodesPerElement);
+	std::vector<Eigen::MatrixXd> NdxiArr(NumberOfQP), NdxjArr(NumberOfQP);
+	for(size_t i = 0; i < NumberOfQP; ++i)
+	{
+		NdxiArr[i] = Eigen::MatrixXd::Zero(2, NodesPerElement);
+		NdxjArr[i] = Eigen::MatrixXd::Zero(2, NodesPerElement);
+	}
+	
+	
+	Eigen::MatrixXd NQP(NodesPerElement,NodesPerElement);
 	for(int q = 0; q < NodesPerElement; ++q)
-		NQP.row(q) = Weights(q) * Narr[q];
-
-	
+		NQP.row(q) =  Narr[q];
 	Eigen::MatrixXd b = Eigen::MatrixXd::Identity(NodesPerElement,NodesPerElement);
-	
 	Eigen::MatrixXd NQPI = NQP.fullPivLu().solve(b);
 	
-	const auto NumberOfQP = QuadUtil.NumberOfQP();
 	
 	std::vector<double> Jac(NumberOfQP);
 	
-	for(int ei = 0; ei < NumberOfElements; ++ei)
+	
+	for(size_t ei = 0; ei < NumberOfElements; ++ei)
 	{		
+		SigmaXX_Element = Eigen::VectorXd::Zero(NodesPerElement);
+		SigmaYY_Element = Eigen::VectorXd::Zero(NodesPerElement);
+		SigmaXY_Element = Eigen::VectorXd::Zero(NodesPerElement);
 		
 		ElementNodesNumbersi = Elements.row(ei);
 		
-		for(int j = 0; j < NodesPerElement; ++j)		
-			ElementNodesCoordi.row(j) = Nodes.row(ElementNodesNumbersi(j));
 	
-		
-		for (int j = 0; j < NodesPerElement; ++j)
+		for(size_t j = 0; j < NodesPerElement; ++j)
 		{
-			Epsi(0) = EpsiXX(ElementNodesNumbersi(j));
-			Epsi(1) = EpsiYY(ElementNodesNumbersi(j));
-			Epsi(2) = EpsiXY(ElementNodesNumbersi(j));
+			ElementNodesCoordi.row(j) = Nodes.row(ElementNodesNumbersi(j));
+			Ue(j * 2) = U(ElementNodesNumbersi(j) * 2);
+			Ue(j * 2 + 1) = U(ElementNodesNumbersi(j) * 2 + 1);
+		}
+		
+		NdxiArr = NdxArr[ei];
+		
+		for (size_t q = 0; q < NodesPerElement; ++q)
+		{
+			Ndx = NdxiArr[q];
 			
-			Sigma = p1 * D * Epsi;
+			for(size_t k = 0; k < NodesPerElement; ++k)
+			{
+				B(0, k * 2) = Ndx(0, k);
+				B(1, k * 2 + 1) = Ndx(1, k);
+				B(2, k * 2) = Ndx(1, k);    B(2, k * 2 + 1) = Ndx(0, k);
+			}
 			
-			SigmaXX(ElementNodesNumbersi(j)) += Sigma(0);
-			SigmaYY(ElementNodesNumbersi(j)) += Sigma(1);
-			SigmaXY(ElementNodesNumbersi(j)) += 0.5 * Sigma(2);
+			
+			Epsi =  B * Ue;
+			
+			Epsi(2) *= 0.5;
+			
+			Sigma = D * Epsi;
+			
+			SigmaXX_QP(q) = Sigma(0);
+			SigmaYY_QP(q) = Sigma(1);
+			SigmaXY_QP(q) = Sigma(2);
 			
 		}	
 		
-		SigmaXX_Element = Eigen::VectorXd::Zero(NodesPerElement);
-
-		SigmaYY_Element = Eigen::VectorXd::Zero(NodesPerElement);	
-	
-		SigmaXY_Element = Eigen::VectorXd::Zero(NodesPerElement);
+		SigmaXX_Element = p1 * NQPI * SigmaXX_QP;
+		SigmaYY_Element = p1 * NQPI * SigmaYY_QP;
+		SigmaXY_Element = p1 * NQPI * SigmaXY_QP;
 		
-		for(int ej = 0; ej < RnnArr[ei].size(); ++ej)
+		
+		for(size_t ej = 0; ej < RnnArr[ei].size(); ++ej)
 		{
-			ElementNodesNumbersj = Elements.row(RnnArr[ei][ej]);
+			size_t Ej = RnnArr[ei][ej];
+			ElementNodesNumbersj = Elements.row(Ej);
 			
-			Jac = JacArr[RnnArr[ei][ej]];
+			Jac = JacArr[Ej];
 			
-			for(int j = 0; j < NodesPerElement; ++j)
-				ElementNodesCoordj.row(j) = Nodes.row(ElementNodesNumbersj(j));
-			
-			for (int j = 0; j < NodesPerElement; ++j)
+			for(size_t j = 0; j < NodesPerElement; ++j)
 			{
-				EpsiXX_Element(j) = EpsiXX(ElementNodesNumbersj(j));
-				EpsiYY_Element(j) = EpsiYY(ElementNodesNumbersj(j));
-				EpsiXY_Element(j) = EpsiXY(ElementNodesNumbersj(j));
+				ElementNodesCoordj.row(j) = Nodes.row(ElementNodesNumbersj(j));
+				Ue(j * 2) = U(ElementNodesNumbersj(j) * 2);
+				Ue(j * 2 + 1) = U(ElementNodesNumbersj(j) * 2 + 1);
 			}
 			
+			NdxjArr = NdxArr[Ej];
+			
+			for (size_t q = 0; q < NodesPerElement; ++q)
+			{		
+				Ndx = NdxjArr[q];
+				
+				for(size_t k = 0; k < NodesPerElement; ++k)
+				{
+					B(0, k * 2) = Ndx(0, k);
+					B(1, k * 2 + 1) = Ndx(1, k);
+					B(2, k * 2) = Ndx(1, k);    B(2, k * 2 + 1) = Ndx(0, k);
+				}
+								
+				Epsi =  B * Ue;
+
+				
+				EpsiXX_QP(q) = Epsi(0);
+				EpsiYY_QP(q) = Epsi(1);
+				EpsiXY_QP(q) = 0.5 * Epsi(2);
+				
+			}	
+			
 		
 
-			for(int q = 0; q < NodesPerElement; ++q)
+			for(size_t q = 0; q < NodesPerElement; ++q)
 			{
 				X = Narr[q] * ElementNodesCoordi;
 				
@@ -1329,9 +1486,9 @@ void ISOFEM::ComputeStress(const JacArray &JacArr ,std::function<double(const do
 				
 				r = R.norm();
 				
-				Epsi(0) = Narr[q] * EpsiXX_Element;
-				Epsi(1) = Narr[q] * EpsiYY_Element;
-				Epsi(2) = Narr[q] * EpsiXY_Element;
+				Epsi(0) = EpsiXX_QP(q);
+				Epsi(1) = EpsiYY_QP(q);
+				Epsi(2) = EpsiXY_QP(q);
 				
 				
 				Sigma = Weights(q) * phi(r,L) * D * Epsi * Jac[q];
@@ -1341,23 +1498,20 @@ void ISOFEM::ComputeStress(const JacArray &JacArr ,std::function<double(const do
 				SigmaXY_QP(q) = Sigma(2);
 				
 			}
-
+		
+			SigmaXX_Element += p2 * NQPI * SigmaXX_QP;			
+			SigmaYY_Element += p2 * NQPI * SigmaYY_QP;			
+			SigmaXY_Element += p2 * NQPI * SigmaXY_QP;
 		
 			
-			SigmaXX_Element += NQPI * SigmaXX_QP;
+		}
 			
-			SigmaYY_Element += NQPI * SigmaYY_QP;
-			
-			SigmaXY_Element += NQPI * SigmaXY_QP;
-			
-	}
-			
-		for (int j = 0; j < NodesPerElement; ++j)
+		for (size_t j = 0; j < NodesPerElement; ++j)
 		{
 			
-			SigmaXX(ElementNodesNumbersi(j)) += p2 * SigmaXX_Element(j);
-			SigmaYY(ElementNodesNumbersi(j)) += p2 * SigmaYY_Element(j);
-			SigmaXY(ElementNodesNumbersi(j)) += 0.5 * p2 * SigmaXY_Element(j);
+			SigmaXX(ElementNodesNumbersi(j)) += SigmaXX_Element(j);
+			SigmaYY(ElementNodesNumbersi(j)) += SigmaYY_Element(j);
+			SigmaXY(ElementNodesNumbersi(j)) += SigmaXY_Element(j);
 			
 		}	
 		
@@ -1372,6 +1526,202 @@ void ISOFEM::ComputeStress(const JacArray &JacArr ,std::function<double(const do
 	
 		for(size_t i = 0; i < NumberOfNodes; ++i)
 			SigmaVM(i) = sqrt(SigmaXX[i] * SigmaXX[i] + SigmaYY[i] * SigmaYY[i] - SigmaXX[i] * SigmaYY[i] + 3.0 * SigmaXY[i] * SigmaXY[i]);
+	
+// 	SigmaXX.resize(NumberOfNodes); SigmaYY.resize(NumberOfNodes); SigmaXY.resize(NumberOfNodes);
+// 	
+// 	SigmaXX =  Eigen::VectorXd::Zero(NumberOfNodes);
+// 	SigmaXY =  Eigen::VectorXd::Zero(NumberOfNodes);
+// 	SigmaYY =  Eigen::VectorXd::Zero(NumberOfNodes);
+// 	SigmaVM =  Eigen::VectorXd::Zero(NumberOfNodes);
+// 	
+// 	Eigen::VectorXd Sigma =  Eigen::VectorXd::Zero(3);
+// 	Eigen::VectorXd Epsi  =  Eigen::VectorXd::Zero(3);
+// 	
+// 	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
+// 	
+// 	unsigned Order;
+// 	
+// 	switch (MESH.NodesPerElement())
+// 	{
+// 		case 4: 
+// 		{
+// 			pFE.reset(new FINITE_ELEMENT::BilinearElement);
+// 			Order = 3;
+// 			break;
+// 		}
+// 		case 8:
+// 		{
+// 			pFE.reset(new FINITE_ELEMENT::QuadraticSerendipElement);
+// 			Order = 5;
+// 			break;
+// 		}
+// 	}
+// 	
+// 	if(HighOrder!=-1) Order = HighOrder;
+// 	
+// 	const FINITE_ELEMENT::QuadratureUtils QuadUtil(pFE.get(), Order);
+// 	
+// 	
+// 	NodesPerElement = pFE->NodesPerElement();
+// 	
+// 	NumberOfElements = MESH.NumberOfElements();
+// 	
+// 	Eigen::MatrixXd NQP(NodesPerElement,NodesPerElement);
+// 	
+// 		
+// 	Eigen::VectorXd EpsiXX_Element = Eigen::VectorXd::Zero(NodesPerElement);
+// 
+// 	Eigen::VectorXd EpsiYY_Element = Eigen::VectorXd::Zero(NodesPerElement);	
+// 	
+// 	Eigen::VectorXd EpsiXY_Element = Eigen::VectorXd::Zero(NodesPerElement);	
+// 	
+// 	
+// 	Eigen::VectorXd SigmaXX_Element = Eigen::VectorXd::Zero(NodesPerElement);
+// 
+// 	Eigen::VectorXd SigmaYY_Element = Eigen::VectorXd::Zero(NodesPerElement);	
+// 	
+// 	Eigen::VectorXd SigmaXY_Element = Eigen::VectorXd::Zero(NodesPerElement);	
+// 	
+// 	
+// 	Eigen::VectorXd SigmaXX_QP = Eigen::VectorXd::Zero(NodesPerElement);
+// 
+// 	Eigen::VectorXd SigmaYY_QP = Eigen::VectorXd::Zero(NodesPerElement);	
+// 	
+// 	Eigen::VectorXd SigmaXY_QP = Eigen::VectorXd::Zero(NodesPerElement);
+// 
+// 	
+// 	Eigen::RowVectorXi ElementNodesNumbersi(NodesPerElement);
+// 	Eigen::RowVectorXi ElementNodesNumbersj(NodesPerElement);
+// 		
+// 	Eigen::MatrixXd ElementNodesCoordi(NodesPerElement, 2);
+// 	Eigen::MatrixXd ElementNodesCoordj(NodesPerElement, 2);
+// 	
+// 	Eigen::RowVector2d X, Y, R;
+// 	
+// 	double r;
+// 	
+// 	const auto &Nodes = MESH.Nodes();
+// 	const auto &Elements = MESH.Elements();
+// 	
+// 	const auto &Narr = QuadUtil.Narr();
+// 	const auto &NGradArr = QuadUtil.NGradArr();
+// 	
+// 	const auto &Weights = QuadUtil.Weights();
+// 	
+// 
+// 	for(int q = 0; q < NodesPerElement; ++q)
+// 		NQP.row(q) =  Narr[q];
+// 
+// 	
+// 	Eigen::MatrixXd b = Eigen::MatrixXd::Identity(NodesPerElement,NodesPerElement);
+// 	
+// 	Eigen::MatrixXd NQPI = NQP.fullPivLu().solve(b);
+// 	
+// 	const auto NumberOfQP = QuadUtil.NumberOfQP();
+// 	
+// 	std::vector<double> Jac(NumberOfQP);
+// 	
+// 	for(int ei = 0; ei < NumberOfElements; ++ei)
+// 	{		
+// 		
+// 		ElementNodesNumbersi = Elements.row(ei);
+// 		
+// 		for(int j = 0; j < NodesPerElement; ++j)		
+// 			ElementNodesCoordi.row(j) = Nodes.row(ElementNodesNumbersi(j));
+// 	
+// 		
+// 		for (int j = 0; j < NodesPerElement; ++j)
+// 		{
+// 			Epsi(0) = EpsiXX(ElementNodesNumbersi(j));
+// 			Epsi(1) = EpsiYY(ElementNodesNumbersi(j));
+// 			Epsi(2) = EpsiXY(ElementNodesNumbersi(j));
+// 			
+// 			Sigma = p1 * D * Epsi;
+// 			
+// 			SigmaXX(ElementNodesNumbersi(j)) += Sigma(0);
+// 			SigmaYY(ElementNodesNumbersi(j)) += Sigma(1);
+// 			SigmaXY(ElementNodesNumbersi(j)) += Sigma(2);
+// 			
+// 		}	
+// 		
+// 		SigmaXX_Element = Eigen::VectorXd::Zero(NodesPerElement);
+// 
+// 		SigmaYY_Element = Eigen::VectorXd::Zero(NodesPerElement);	
+// 	
+// 		SigmaXY_Element = Eigen::VectorXd::Zero(NodesPerElement);
+// 		
+// 		
+// 		for(int ej = 0; ej < RnnArr[ei].size(); ++ej)
+// 		{
+// 			ElementNodesNumbersj = Elements.row(RnnArr[ei][ej]);
+// 			
+// 			Jac = JacArr[RnnArr[ei][ej]];
+// 			
+// 			for(int j = 0; j < NodesPerElement; ++j)
+// 				ElementNodesCoordj.row(j) = Nodes.row(ElementNodesNumbersj(j));
+// 			
+// 			for (int j = 0; j < NodesPerElement; ++j)
+// 			{
+// 				EpsiXX_Element(j) = EpsiXX(ElementNodesNumbersj(j));
+// 				EpsiYY_Element(j) = EpsiYY(ElementNodesNumbersj(j));
+// 				EpsiXY_Element(j) = EpsiXY(ElementNodesNumbersj(j));
+// 			}
+// 			
+// 		
+// 
+// 			for(int q = 0; q < NodesPerElement; ++q)
+// 			{
+// 				X = Narr[q] * ElementNodesCoordi;
+// 				
+// 				Y = Narr[q] * ElementNodesCoordj;
+// 				
+// 				R = X - Y;
+// 				
+// 				r = R.norm();
+// 				
+// 				Epsi(0) = Narr[q] * EpsiXX_Element;
+// 				Epsi(1) = Narr[q] * EpsiYY_Element;
+// 				Epsi(2) = Narr[q] * EpsiXY_Element;
+// 				
+// 				
+// 				Sigma = Weights(q) * phi(r,L) * D * Epsi * Jac[q];
+// 				
+// 				SigmaXX_QP(q) = Sigma(0);
+// 				SigmaYY_QP(q) = Sigma(1);
+// 				SigmaXY_QP(q) = Sigma(2);
+// 				
+// 			}
+// 
+// 		
+// 			
+// 			SigmaXX_Element += NQPI * SigmaXX_QP;
+// 			
+// 			SigmaYY_Element += NQPI * SigmaYY_QP;
+// 			
+// 			SigmaXY_Element += NQPI * SigmaXY_QP;
+// 			
+// 	}
+// 			
+// 		for (int j = 0; j < NodesPerElement; ++j)
+// 		{
+// 			
+// 			SigmaXX(ElementNodesNumbersi(j)) += p2 * SigmaXX_Element(j);
+// 			SigmaYY(ElementNodesNumbersi(j)) += p2 * SigmaYY_Element(j);
+// 			SigmaXY(ElementNodesNumbersi(j)) += p2 * SigmaXY_Element(j);
+// 			
+// 		}	
+// 		
+// 	}	
+// 	
+// 	for (auto count = cN.begin(); count != cN.end(); ++count) 
+// 	{		
+// 		SigmaXX(count->first)/=count->second;
+// 		SigmaXY(count->first)/=count->second;
+// 		SigmaYY(count->first)/=count->second;		
+// 	}
+	
+	for(size_t i = 0; i < NumberOfNodes; ++i)
+		SigmaVM(i) = sqrt(SigmaXX[i] * SigmaXX[i] + SigmaYY[i] * SigmaYY[i] - SigmaXX[i] * SigmaYY[i] + 3.0 * SigmaXY[i] * SigmaXY[i]);
 }
 
 
@@ -1469,6 +1819,7 @@ void ISOFEM::WriteToVTK(std::string _filename)
 		}
 				
 	}
+
 	
 	vtkfile << "POINT_DATA " << MESH.NumberOfNodes() << std::endl;
 	vtkfile << "SCALARS U_X double " << 1 << std::endl;

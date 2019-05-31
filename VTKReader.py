@@ -208,7 +208,7 @@ pArr = ['1.0', '0.9', '0.8']
 
 
 SearchPath = "/home/anshu/Документы/NonLocalStaticAnalysis/bin/VTK/"
-vtkFileNames = ["tens_beam_4_5000.vtk", "tens_beam_4_5000_0.9_100.0.vtk", "tens_beam_4_5000_0.9_50.00.vtk"]
+vtkFileNames = ["tens_beam_8_5000.vtk", "tens_beam_8_5000_0.9_50.00.vtk", "tens_beam_8_5000_0.9_50.00_fmm.vtk"]
 
 vtkPathToFiles = []
 

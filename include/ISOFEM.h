@@ -14,7 +14,6 @@
 #include <stdlib.h>
 #include <iomanip>
 
-
 using Triplet = Eigen::Triplet<double>;
 
 using NdxArray = std::vector<std::vector<Eigen::MatrixXd>>;
@@ -39,6 +38,7 @@ public:
 	void NonLocalStaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load, 
 						std::function<double(const double &, const double &)> phi);
 	
+	const double &SystemEnergy() const;	
 	
 protected:
 	
@@ -63,6 +63,8 @@ protected:
 	double p1, p2;             // параметры вклада локальных и нелокальных эффектов
 	
 	double L;                  // радиус влияния 
+	
+	double DeformationEnergy = 0.0;
 	
 	int NumberOfNodes, NumberOfElements, NodesPerElement, UxBoundNumber, 
 		UyBoundNumber, UxUyBoundNumber, LoadBoundNumber;
@@ -94,13 +96,13 @@ protected:
 	
 	void ComputeStress();
 	
-	void ComputeStress(const JacArray &, std::function<double(const double &, const double &)>);
+	void ComputeStress(const JacArray &, const NdxArray &, std::function<double(const double &, const double &)>);
 	
 	std::map<int, int> Counter(const Eigen::MatrixXi &);
 	
 	void NaiveRnnSearch(std::vector<std::vector<int>> &RnnArr, const double &L);
 	
-	void WriteToVTK(std::string _filename);
+	virtual void WriteToVTK(std::string _filename);
 	
 	
 };
