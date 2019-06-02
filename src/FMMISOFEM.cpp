@@ -1,8 +1,8 @@
 #include "FMMISOFEM.h"
 
 
-void FMMISOFEM::FMMStaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load, 
-		std::function<double(const double &, const double &)> phi)
+void FMMISOFEM::FMMStaticAnalysis(const std::function<Eigen::Vector2d(Eigen::RowVector2d &)> &load,
+								  const std::function<double(const double, const double)> &A)
 {
 	auto T1 = std::chrono::high_resolution_clock::now();
 	
@@ -30,7 +30,8 @@ void FMMISOFEM::FMMStaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVector
 			
 			ConstructStiffMatr(TripletList, KeArr, GaussNodes, COE, NdxArr, JArr, JacArr);
 			
-			ConstructStiffMatr(TripletList, KeArr, GaussNodes, COE, NdxArr, JArr, JacArr, phi);
+			ConstructStiffMatr(TripletList, KeArr, GaussNodes, COE, NdxArr, JArr, JacArr, A);
+			
 			t2 = std::chrono::high_resolution_clock::now();
 			std::cout << "ConstructStiffMatr time = "
 					<< std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
@@ -54,7 +55,7 @@ void FMMISOFEM::FMMStaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVector
 				<< std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
 				<< " milliseconds\n";
 				
-		Eigen::ConjugateGradient<Eigen::SparseMatrix<double>, Eigen::Lower, Eigen::IdentityPreconditioner>Solver;
+		Eigen::ConjugateGradient<Eigen::SparseMatrix<double>, Eigen::Lower|Eigen::Upper, Eigen::IdentityPreconditioner> Solver;
 		
 		Solver.compute(K);	
 		
@@ -79,7 +80,7 @@ void FMMISOFEM::FMMStaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVector
 				<< " milliseconds\n";
 		
 		t1 = std::chrono::high_resolution_clock::now();
-		ComputeStress(JacArr,NdxArr,phi);
+		ComputeStress(JacArr,NdxArr,A);
 		t2 = std::chrono::high_resolution_clock::now();
 		std::cout << "ComputeStress time = "
 				<< std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
@@ -110,33 +111,21 @@ void FMMISOFEM::FMMStaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVector
 
 
 
-
-
 void FMMISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList, std::vector<Eigen::MatrixXd> &KeArr, std::vector<Eigen::MatrixXd> &GaussNodes, Eigen::MatrixXd &COE , NdxArray &NdxArr, JArray &JArr, JacArray &JacArr)
 {
 	
 	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
-	unsigned Order;
-	switch (MESH.NodesPerElement())
-	{
-		case 4: 
-		{
-			pFE.reset(new FINITE_ELEMENT::BilinearElement);
-			Order = 3;
-			break;
-		}
-		case 8:
-		{
-			Order = 5;
-			pFE.reset(new FINITE_ELEMENT::QuadraticSerendipElement);
-			break;
-		}
-	}
+	unsigned Order = SetFiniteElement(MESH.NodesPerElement(), pFE);
 	NodesPerElement = pFE->NodesPerElement();
 	NumberOfElements = MESH.NumberOfElements();
 
-	
-	
+	std::array<std::function<double(double)>, 5> Phi = {{ [](double t)->double {return 1.0;},
+														  [](double t)->double {return t;},
+														  [](double t)->double {return 0.5 * t * t;},
+														  [](double t)->double {return t * t * t / 6.0;},
+														  [](double t)->double {return t * t * t * t / 24.0;}
+													   }};
+											
 	const FINITE_ELEMENT::QuadratureUtils QuadUtil(pFE.get(),Order);
 	if(HighOrder!=-1) Order = HighOrder;
 	const FINITE_ELEMENT::QuadratureUtils QuadUtilNL(pFE.get(),Order);
@@ -160,20 +149,19 @@ void FMMISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList, std::vecto
 	{
 		NumberOfTriplets += RnnArr[ei].size() * 4 * NodesPerElement * NodesPerElement;
 	}
-
+	TripletList.reserve(NumberOfTriplets);
+	
+	
 	const auto NumberOfQP = QuadUtil.NumberOfQP();
 	const auto NumberOfQPNL = QuadUtilNL.NumberOfQP();
 	
-	
-	TripletList.reserve(NumberOfTriplets);
-	Eigen::MatrixXd ElementNodesCoord(NodesPerElement, 2);
-	
-	
 	const auto &Nodes = MESH.Nodes();
 	const auto &Elements = MESH.Elements();
+	
 	const auto &Narr = QuadUtil.Narr();
 	const auto &NGradArr = QuadUtil.NGradArr();
-	const auto &Weights = QuadUtil.Weights();
+	const auto &Weights = QuadUtil.Weights();	
+
 	const auto &NarrNL = QuadUtilNL.Narr();
 	const auto &NGradArrNL = QuadUtilNL.NGradArr();
 	const auto &WeightsNL = QuadUtilNL.Weights();
@@ -181,24 +169,21 @@ void FMMISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList, std::vecto
 	
 	Eigen::Vector2d X , Y , R;	
 	Eigen::MatrixXd ElementGaussNodes(2, NumberOfQPNL);
+	Eigen::MatrixXd ElementNodesCoord(NodesPerElement, 2);
+	
 	
 	double Jac = 0.0;
 
+	
 	std::vector<int> IdX(NodesPerElement * 2);
-	std::vector<Eigen::MatrixXd> KeAlpha(4);
+	std::vector<Eigen::MatrixXd> KeQ(NumberOfQPNL);	
+	std::vector<Eigen::Vector2d> Rq(NumberOfQPNL);
 	
 	for(size_t e = 0; e < NumberOfElements; ++e)
 	{
 		ElementNodesNumbers = Elements.row(e);
 		
 		Ke = Eigen::MatrixXd::Zero(NodesPerElement * 2, NodesPerElement * 2);
-		
-		NdxArr[e].resize(NumberOfQPNL);
-		JArr[e].resize(NumberOfQPNL);
-		JacArr[e].resize(NumberOfQPNL);
-		
-		
-		GaussNodes[e].resize(2, NumberOfQPNL);
 		
 		for(size_t j = 0; j < NodesPerElement; ++j)
 		{		
@@ -230,29 +215,30 @@ void FMMISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList, std::vecto
 				BT(k * 2,2) = Ndx(1,k);    BT(k * 2 + 1, 2) = Ndx(0,k);
 			}
 		
-			Ke += Weights(q) * BT * D * B * Jac;
-			
+			Ke += Weights(q) * BT * D * B * Jac;			
 			
 		}
 	
 		Ke*=p1;
-		
 
 		for(size_t j = 0; j < NodesPerElement * 2; ++j)		
 			for(size_t k = 0; k < NodesPerElement * 2; ++k)
 			{
-				if(IdX[k] <= IdX[j])
+// 				if(IdX[k] <= IdX[j])
 				TripletList.push_back(Triplet(IdX[j], IdX[k], Ke(j, k)));
 				
 			}
 			
+		NdxArr[e].resize(NumberOfQPNL);
+		JArr[e].resize(NumberOfQPNL);
+		JacArr[e].resize(NumberOfQPNL);
+				
 		Ke = Eigen::MatrixXd::Zero(NodesPerElement * 2, NodesPerElement * 2);
-		
-		
+			
 		Y = COE.col(e);
+		
 		for (size_t q = 0; q < NumberOfQPNL; ++q)
 		{
-			
 			X = NarrNL[q] * ElementNodesCoord;
 			
 			ElementGaussNodes.col(q) = X;
@@ -269,7 +255,7 @@ void FMMISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList, std::vecto
 			
 			JacArr[e][q] = Jac;
 			
-			R = X - Y;
+			Rq[q] = X - Y;
 			
 			for(size_t k = 0; k < NodesPerElement; ++k)
 			{
@@ -282,76 +268,44 @@ void FMMISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList, std::vecto
 				BT(k * 2,2) = Ndx(1,k);    BT(k * 2 + 1, 2) = Ndx(0,k);
 			}
 		
-			Ke += WeightsNL(q) * BT * D * B * Jac;
+			KeQ[q] = WeightsNL(q) * BT * D * B * Jac;
 		}
 		
 		GaussNodes[e] = ElementGaussNodes;
 		
-		
-		KeAlpha[0] = Eigen::MatrixXd::Zero(NodesPerElement * 2, NodesPerElement * 2);		
-		for (size_t q = 0; q < NumberOfQPNL; ++q)
-		{
-			KeAlpha[0] += Ke;
-		}
-		
-		KeAlpha[1] = Eigen::MatrixXd::Zero(NodesPerElement * 2, NodesPerElement * 2);		
-		for (size_t q = 0; q < NumberOfQPNL; ++q)
-		{
-			X = ElementGaussNodes.col(q);
-			
-			R = X - Y;
-		
-			KeAlpha[1] += Ke * R(1) / L;
-		}
-		
-		KeAlpha[2] = Eigen::MatrixXd::Zero(NodesPerElement * 2, NodesPerElement * 2);		
-		for (size_t q = 0; q < NumberOfQPNL; ++q)
-		{
-			X = ElementGaussNodes.col(q);
-			
-			R = X - Y;
-		
-			KeAlpha[2] += Ke * R(0) / L;
-		}
-		
-		KeAlpha[3] = Eigen::MatrixXd::Zero(NodesPerElement * 2, NodesPerElement * 2);		
-		for (size_t q = 0; q < NumberOfQPNL; ++q)
-		{
-			X = ElementGaussNodes.col(q);
-			
-			R = X - Y;
-		
-			KeAlpha[3] += Ke * R(0) * R(1) / (L * L);
-		}
-		
-		for (size_t i = 0; i < 4; ++i)
-			KeArr[e * 4 + i] = KeAlpha[i];
-		
+		for(size_t i = 0; i < 2; ++i)
+			for(size_t j = 0; j < 2; ++j)				
+			{	
+				Ke = Eigen::MatrixXd::Zero(NodesPerElement * 2, NodesPerElement * 2);
+				
+				for (size_t q = 0; q < NumberOfQPNL; ++q)
+				{
+					R = Rq[q]/L;
+				
+					Ke += KeQ[q] * Phi[i](R(0)) * Phi[j](R(1));
+				}
+				
+				KeArr[e * 4 + i * 2 + j] = Ke;
+			}	
+
 	}
+	
 }
 
 
-void FMMISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList, const std::vector<Eigen::MatrixXd> &KeArr, const std::vector<Eigen::MatrixXd> &GaussNodes, const Eigen::MatrixXd &COE, 
-						const NdxArray &NdxArr, const JArray &JArr, const JacArray &JacArr, std::function<double(const double &, const double &)> phi)
+void FMMISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList, const std::vector<Eigen::MatrixXd> &KeArr, const std::vector<Eigen::MatrixXd> &GaussNodes, const Eigen::MatrixXd &COE, const NdxArray &NdxArr, const JArray &JArr, const JacArray &JacArr, const std::function<double(const double, const double)> &A)
 {
 	std::shared_ptr<FINITE_ELEMENT::FiniteElement> pFE;
 	
-	unsigned Order;
-	switch (MESH.NodesPerElement())
-	{
-		case 4: 
-		{
-			pFE.reset(new FINITE_ELEMENT::BilinearElement);
-			Order = 3;
-			break;
-		}
-		case 8:
-		{
-			pFE.reset(new FINITE_ELEMENT::QuadraticSerendipElement);
-			Order = 5;
-			break;
-		}
-	}
+	unsigned Order = SetFiniteElement(MESH.NodesPerElement(), pFE);
+	
+	const std::array<std::function<double(double)>, 5> h = {{ [](double t)->double {return 1.0;},
+															  [](double t)->double {return 2.0 * t;},
+															  [](double t)->double {return 4.0 * t * t - 2.0;},
+															  [](double t)->double {return 8.0 * t * t * t - 12.0 * t;},
+															  [](double t)->double { double tt = t * t;
+																		return 16.0 * tt * tt  - 48.0 * tt + 12.0;}
+														   }};
 	
 	if(HighOrder!=-1) Order = HighOrder;
 	
@@ -365,11 +319,13 @@ void FMMISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList, const std:
 	Eigen::RowVectorXi ElementNodesNumbersj(NodesPerElement);
 	
 	Eigen::RowVector2d X, Y, R;
+
 	
 	double r = 0.0;
 	
 	const auto &Nodes = MESH.Nodes();
 	const auto &Elements = MESH.Elements();	
+	
 	const auto &Narr = QuadUtil.Narr();
 	const auto &NGradArr = QuadUtil.NGradArr();	
 	const auto &Weights = QuadUtil.Weights();	
@@ -377,16 +333,15 @@ void FMMISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList, const std:
 	
 	std::vector<Eigen::Matrix2d> JArri, JArrj; 	
 	JArri.resize(NumberOfQP); JArrj.resize(NumberOfQP);
+	std::vector<Eigen::Vector2d> Rq(NumberOfQP);
 	
-	std::vector<double> Jaci(NumberOfQP), Jacj(NumberOfQP), phiQP(NumberOfQP);
+	std::vector<double> Jaci(NumberOfQP), Jacj(NumberOfQP), Aq(NumberOfQP), rq(NumberOfQP);
 	
 	std::vector<int> IdX1(NodesPerElement * 2), IdX2(NodesPerElement * 2);
 	
-	Eigen::MatrixXd Kej = Eigen::MatrixXd::Zero(NodesPerElement * 2,NodesPerElement * 2);
-	std::vector<Eigen::MatrixXd> KeAlpha(4);
+	Eigen::MatrixXd Kej = Eigen::MatrixXd::Zero(NodesPerElement * 2, NodesPerElement * 2);
 	
 	Eigen::MatrixXd ElementGaussNodes(2,NumberOfQP);
-	
 	
 
 	for(size_t ei = 0; ei < NumberOfElements; ++ei)
@@ -408,7 +363,6 @@ void FMMISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList, const std:
 			size_t Ej = RnnArr[ei][ej];
 			
 			ElementNodesNumbersj = Elements.row(Ej);
-			Jacj = JacArr[Ej];
 			
 			Ke = Eigen::MatrixXd::Zero(NodesPerElement * 2, NodesPerElement * 2);
 			
@@ -418,63 +372,39 @@ void FMMISOFEM::ConstructStiffMatr(std::vector<Triplet> &TripletList, const std:
 				IdX2[j * 2 + 1] = ElementNodesNumbersj(j) * 2 + 1;
 			}
 			
-			
 			Y = COE.col(Ej);
 			
-			
-			Kej = KeArr[Ej *4];
-			for(size_t qj = 0; qj < QuadUtil.NumberOfQP(); ++qj)
+			for(size_t qj = 0; qj < NumberOfQP; ++qj)
 			{
 				X = ElementGaussNodes.col(qj);
-				
 				R = X - Y;
-				
+				Rq[qj] = R;
 				r = R.norm();
-				
-				phiQP[qj] = phi(r,L);
-				
-				Ke +=  Kej* phiQP[qj];
-			}
-		
-			
-			Kej = KeArr[Ej *4 + 1];
-			for(size_t qj = 0; qj < QuadUtil.NumberOfQP(); ++qj)
-			{
-				X = ElementGaussNodes.col(qj);
-				
-				R = X - Y;
-				
-				Ke +=  Kej* phiQP[qj] * R(1) * 2.0 / L;
+				rq[qj] = r;
+				Aq[qj] = A(r, L);
 			}
 			
-			
-			Kej = KeArr[Ej *4 + 2];
-			for(size_t qj = 0; qj < QuadUtil.NumberOfQP(); ++qj)
-			{
-				X = ElementGaussNodes.col(qj);
+			for(size_t i = 0; i < 2; ++i)
+				for(size_t j = 0; j < 2; ++j)
+				{
+					Kej = KeArr[Ej * 4 + i * 2 + j];
+					
+					for(size_t qj = 0; qj < NumberOfQP; ++qj)
+					{
+						R = Rq[qj]/L;
 				
-				R = X - Y;
+						r = rq[qj];
 				
-				Ke +=  Kej* phiQP[qj] * R(0) * 2.0 / L;
-			}
-			
-			
-			Kej = KeArr[Ej *4 + 3];
-			for(size_t qj = 0; qj < QuadUtil.NumberOfQP(); ++qj)
-			{
-				X = ElementGaussNodes.col(qj);
-				
-				R = X - Y;
-				
-				Ke +=  Kej * phiQP[qj] * R(0) * R(1) * 4.0 / (L * L);
-			}
+						Ke += Weights(qj) * Kej * Aq[qj] * h[i](R(0)) * h[j](R(1)) * Jaci[qj];
+					}
+				}
 			
 			Ke *=p2;
 				
 			for(size_t j = 0; j < NodesPerElement * 2; ++j)		
 				for(size_t k = 0; k < NodesPerElement * 2; ++k)
 				{
-					if(IdX2[k] <= IdX1[j])
+// 					if(IdX2[k] <= IdX1[j])
 					TripletList.push_back(Triplet(IdX1[j], IdX2[k], Ke(j ,k)));
 				}
 	}

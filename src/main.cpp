@@ -30,7 +30,7 @@ int main(int argc, char *argv[])
 	
 	if(argc > 2)
 	{
-		const auto phi1 =[](const double &r, const double &L)->double 
+		const auto A1 =[](const double r, const double L)->double 
 		{
 			double l = 0.8 * L;
 			double res = r*r/(l * l);
@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
 			return res;
 		};
 		
-		const auto phi2 =[](const double &r, const double &L)->double 
+		const auto A2 =[](const double r, const double L)->double 
 		{
 			double res = 1.0 - r/L;
 
@@ -64,10 +64,10 @@ int main(int argc, char *argv[])
 			switch(N)
 			{
 				case 1:
-					Task.NonLocalStaticAnalysis(Load, phi1);
+					Task.NonLocalStaticAnalysis(Load, A1);
 					break;
 				case 2:
-					Task.NonLocalStaticAnalysis(Load, phi2);
+					Task.NonLocalStaticAnalysis(Load, A2);
 					break;
 				default:
 					break;
@@ -94,10 +94,10 @@ int main(int argc, char *argv[])
 				switch(N)
 				{
 					case 1:
-						Task.NonLocalStaticAnalysis(Load, phi1);
+						Task.NonLocalStaticAnalysis(Load, A1);
 						break;
 					case 2:
-						Task.NonLocalStaticAnalysis(Load, phi2);
+						Task.NonLocalStaticAnalysis(Load, A2);
 						break;
 					default:
 						break;
@@ -110,10 +110,10 @@ int main(int argc, char *argv[])
 				switch(N)
 				{
 					case 1:
-						Task.FMMStaticAnalysis(Load, phi1);
+						Task.FMMStaticAnalysis(Load, A1);
 						break;
 					case 2:
-						Task.FMMStaticAnalysis(Load, phi2);
+						Task.FMMStaticAnalysis(Load, A2);
 						break;
 					default:
 						break;
@@ -140,10 +140,10 @@ int main(int argc, char *argv[])
 			switch(N)
 			{
 				case 1:
-					Task.FMMStaticAnalysis(Load, phi1);
+					Task.FMMStaticAnalysis(Load, A1);
 					break;
 				case 2:
-					Task.FMMStaticAnalysis(Load, phi2);
+					Task.FMMStaticAnalysis(Load, A2);
 					break;
 				default:
 					break;

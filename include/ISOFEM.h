@@ -27,16 +27,16 @@ using JacArray = std::vector<std::vector<double>>;
 class ISOFEM
 {
 public:
-	ISOFEM(std::string _filename);
+	ISOFEM(std::string);
 	
-	ISOFEM(std::string _filename, double _p1, double R);
+	ISOFEM(std::string, double, double);
 	
-	ISOFEM(std::string _filename, double _p1, double R, int _HighOrder);
+	ISOFEM(std::string, double, double, int);
 	
-	void StaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load);
+	void StaticAnalysis(const std::function<Eigen::Vector2d(Eigen::RowVector2d &)>&);
 	
-	void NonLocalStaticAnalysis(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load, 
-						std::function<double(const double &, const double &)> phi);
+	void NonLocalStaticAnalysis(const std::function<Eigen::Vector2d(Eigen::RowVector2d &)>  &,
+								const std::function<double(const double, const double)> &);
 	
 	const double &SystemEnergy() const;	
 	
@@ -73,36 +73,41 @@ protected:
 	
 	FINITE_ELEMENT::MESH MESH;
 	
-	void ConstructRightPart(std::function<Eigen::Vector2d(Eigen::RowVector2d &)> load);
+	void ConstructRightPart(const std::function<Eigen::Vector2d(Eigen::RowVector2d &)> &);
 
-	void ConstructStiffMatr(std::vector<Triplet> &TripletList);
+	void ConstructStiffMatr(std::vector<Triplet> &);
 	
-	void ConstructStiffMatr(std::vector<Triplet> &TripletList, NdxArray &NdxArr, JArray &JArr, JacArray &JacArr);
+	void ConstructStiffMatr(std::vector<Triplet> &, NdxArray &, JArray &, JacArray &);
 	
-	void ConstructStiffMatr(std::vector<Triplet> &, const NdxArray &, const JArray &, const JacArray &, std::function<double(const double &, const double &)> phi);
+	void ConstructStiffMatr(std::vector<Triplet> &, const NdxArray &, const JArray &, const JacArray &, 
+							const std::function<double(const double, const double)> &);
 	
 	void ApplyingConstraints();
 	
-	std::vector<int> UniqueNodes(const Eigen::MatrixXi &Elements);
+	std::vector<int> UniqueNodes(const Eigen::MatrixXi &);
 	
-	inline void ComputeB(const Eigen::MatrixXd &Ndx);
+	inline void ComputeB(const Eigen::MatrixXd &);
 	
- 	inline void ComputeKe(const int &NumberOfQP, const Eigen::RowVectorXd &Weights, const Eigen::MatrixXd &ElementNodesCoord,
-						  const std::vector<Eigen::MatrixXd> &NGradArr, Eigen::MatrixXd &Ndx);
+ 	inline void ComputeKe(const int &, const Eigen::RowVectorXd &, const Eigen::MatrixXd &,
+						  const std::vector<Eigen::MatrixXd> &,          Eigen::MatrixXd &);
 	
-	inline void AddKeToTriplet(std::vector<Triplet> &TripletList, const std::vector<int> &IdX);
+	inline void AddKeToTriplet(std::vector<Triplet> &, const std::vector<int> &);
 	
 	void ComputeStrains();
 	
 	void ComputeStress();
 	
-	void ComputeStress(const JacArray &, const NdxArray &, std::function<double(const double &, const double &)>);
+	void ComputeStress(const JacArray &, const NdxArray &, const std::function<double(const double, const double)> &);
+	
+	void SetFiniteElement(const unsigned, std::shared_ptr<FINITE_ELEMENT::FiniteElement> &, unsigned &);
+	
+	unsigned SetFiniteElement(const unsigned, std::shared_ptr<FINITE_ELEMENT::FiniteElement> &);
 	
 	std::map<int, int> Counter(const Eigen::MatrixXi &);
 	
-	void NaiveRnnSearch(std::vector<std::vector<int>> &RnnArr, const double &L);
+	void NaiveRnnSearch(std::vector<std::vector<int>> &, const double &);
 	
-	virtual void WriteToVTK(std::string _filename);
+	virtual void WriteToVTK(std::string);
 	
 	
 };
