@@ -5,6 +5,7 @@ from vtk import *
 from vtk.util.numpy_support import vtk_to_numpy
 
 
+
 class VTKtoTIKZ:
 		
 	def __init__(self, vtkFileNames, SearchPath):
@@ -207,16 +208,3 @@ def main():
 	
 if __name__ == '__main__':
 	main()
-	
-
-	
-# ============================================================
-# ============================================================
-# ============================================================
-	
-	
-	
-	
-	
-	
-	
