@@ -1,4 +1,4 @@
-# binaries folder
-bin/
-# objects folder
-obj/
+# Exclude everything expect directories include and src
+/*
+!include/
+!src/

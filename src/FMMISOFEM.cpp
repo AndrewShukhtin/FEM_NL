@@ -54,22 +54,28 @@ void FMMISOFEM::FMMStaticAnalysis(const std::function<Eigen::Vector2d(Eigen::Row
 		std::cout << "ApplyingConstraints time = "
 				<< std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
 				<< " milliseconds\n";
-				
-		Eigen::ConjugateGradient<Eigen::SparseMatrix<double>, Eigen::Lower|Eigen::Upper, Eigen::IdentityPreconditioner> Solver;
 		
-		Solver.compute(K);	
+		{	
+			omp_set_num_threads(4);
+			Eigen::setNbThreads(4);
+			
+			Eigen::ConjugateGradient<Eigen::SparseMatrix<double>, Eigen::Lower> Solver;
+			
+			Solver.compute(K);	
+			
+			t1 = std::chrono::high_resolution_clock::now();
+			
+			U = Solver.solve(F);
 		
-		t1 = std::chrono::high_resolution_clock::now();
-		U = Solver.solve(F);
-		t2 = std::chrono::high_resolution_clock::now();
-		std::cout << "System solve time = "
-				<< std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
-				<< " milliseconds\n";
-		std::cout << "+++++++++++++++++++++++++++++++++++++" <<std::endl;
-		std::cout << "+ #iterations:     | " << Solver.iterations() << "            +" <<std::endl;
-		std::cout << "+ Estimated error: | " << Solver.error()   << "    +"  << std::endl;		
-		std::cout << "+++++++++++++++++++++++++++++++++++++" <<std::endl;
-	// 	std::cout <<"\nU:\n"<< U <<std::endl;
+			t2 = std::chrono::high_resolution_clock::now();
+			std::cout << "System solve time = "
+					<< std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count()
+					<< " milliseconds\n";
+			std::cout << "+++++++++++++++++++++++++++++++++++++" <<std::endl;
+			std::cout << "+ #iterations:     | " << Solver.iterations() << "           +" <<std::endl;
+			std::cout << "+ Estimated error: | " << Solver.error()   << "    +"  << std::endl;		
+			std::cout << "+++++++++++++++++++++++++++++++++++++" <<std::endl;
+		}
 		
 		t1 = std::chrono::high_resolution_clock::now();
 		cN = Counter(MESH.Elements());

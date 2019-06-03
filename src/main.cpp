@@ -12,6 +12,13 @@ int main(int argc, char *argv[])
 
 	assert(argc > 1);
 	
+	Eigen::initParallel();
+	
+	omp_set_num_threads(4);
+	Eigen::setNbThreads(4);
+	
+	std::cout<<"Eigen Version: " << EIGEN_WORLD_VERSION << "." << EIGEN_MAJOR_VERSION << "." << EIGEN_MINOR_VERSION<< std::endl;
+	
 	const auto Load = [](Eigen::RowVector2d &X)->Eigen::Vector2d 
 	{
 		Eigen::Vector2d V; 
@@ -150,7 +157,6 @@ int main(int argc, char *argv[])
 					
 			}
 		}
-
 	
  	}
  	

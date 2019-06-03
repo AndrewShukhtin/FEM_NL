@@ -6,6 +6,8 @@
 
 #include <map>
 #include <Eigen/Sparse>
+#include <Eigen/Core>
+#include "omp.h"
 #include <memory>
 #include <functional>
 #include <algorithm>

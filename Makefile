@@ -11,7 +11,8 @@ SOURCES  := $(wildcard $(SRCDIR)/*.cpp)
 INCLUDES := $(wildcard $(HEADDIR)/*.h)
 OBJECTS  := $(SOURCES:$(SRCDIR)/%.cpp=$(OBJDIR)/%.o)
 
-CFLAGS=-Wall -I$(HEADDIR) -c -w -O2 -m64
+CFLAGS=-Wall -I$(HEADDIR) -c -w -O2 -m64 -qopenmp -inline-forceinline
+LFLAGS=-Wall -I$(HEADDIR) -w -O2 -m64 -qopenmp -inline-forceinline
 
 $(BINDIR)/$(TARGET): $(OBJECTS)
 	$(CC) -o $@ $(LFLAGS) $(OBJECTS)
