@@ -1,3 +1,4 @@
 # Exclude everything expect include and src directories
 bin/*
 obj/*
+!obd/
