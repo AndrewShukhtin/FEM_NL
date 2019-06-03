@@ -22,16 +22,10 @@ namespace FINITE_ELEMENT
 		int Ndim, Ne, type;
 	
 		meshfile >> text >> Ndim;
-	
-	// 	std::cout << text << " " << Ndim <<std::endl;
 		
 		meshfile >> text >> Ne;
 		
-	// 	std::cout << text << " " << Ne <<std::endl;
-		
 		meshfile >> type;
-		
-	// 	std::cout << "type: "  << type <<std::endl;
 		
 		if(type == 9)
 		{
@@ -51,9 +45,6 @@ namespace FINITE_ELEMENT
 		int Ni;
 		meshfile >> Ni;
 		
-	// 	std::cout << "Elements.row(0): " << std::endl;
-	// 	std::cout << Elements.row(0) << std::endl;
-		
 		for (size_t i = 1; i < Ne; ++i)
 		{
 			meshfile >> type;
@@ -64,29 +55,18 @@ namespace FINITE_ELEMENT
 			meshfile >> Ni;
 		}
 		
-	// 	std::cout << std::endl;
-	// 	std::cout << "Elements: " << std::endl;
-	// 	std::cout << Elements << std::endl;
-		
 		int Nn;
 		meshfile >> text >> Nn;
 		
-	// 	std::cout << text << " " << Nn << std::endl;
 		_Nodes.resize(Nn,Ndim);
 		
 		
 		for (size_t i = 0; i < Nn; ++i)
 			meshfile >> _Nodes(i,0) >>  _Nodes(i,1) >> Ni;
-		
-	// 	std::cout << std::endl;
-	// 	std::cout << "Nodes:" << std::endl;
-	// 	std::cout << Nodes << std::endl;
-		
+
 		int Nb;
 		
 		meshfile >> text >> Nb;
-		
-	// 	std::cout << text << " " << Nb <<  std::endl;
 		
 		_Bounds.resize(Nb);
 		
@@ -94,16 +74,10 @@ namespace FINITE_ELEMENT
 		{
 			
 			meshfile >> text >> _Bounds[i].tag;
-		
-	// 		std::cout << text << " " << tag << std::endl;
 			
 			meshfile >> text >> Ne;
 			
-	// 		std::cout << text << " " << Ne << std::endl;
-			
 			meshfile >> _Bounds[i].type;
-			
-	// 		std::cout << "Type "<< type << std::endl;
 			
 			if(_Bounds[i].type == 3)
 			{
@@ -113,14 +87,10 @@ namespace FINITE_ELEMENT
 				_Bounds[i].Elements.resize(Ne,3);
 			}	
 			
-	// 		std::cout << Bounds[i].cols() << std::endl;
-			
 			for(size_t k = 0; k < _Bounds[i].Elements.cols(); ++k)
 			{
 				meshfile >> _Bounds[i].Elements(0,k);
 			}
-			
-	//  		std::cout << Bounds[i].row(0) << std::endl;
 
 			for(size_t j = 1; j < Ne; ++j)
 			{
@@ -130,16 +100,9 @@ namespace FINITE_ELEMENT
 						meshfile >> _Bounds[i].Elements(j,k);
 				
 			}
-			
-	//  std::cout << Bounds[i] << std::endl;
-		
+	
 	}
 	
-// 		for(size_t i = 0; i < Elements.cols(); ++i)
-// 		{
-// 			std::cout << Nodes.row(Elements(0,i)) << " ";
-// 		}
-			
 		meshfile.close();
 	};
 	
@@ -161,7 +124,7 @@ namespace FINITE_ELEMENT
 	
 	MESH::~MESH()
 	{
-		//std::cout << "Mesh destructor" << std::endl;
+	
 	};
 	
 	std::ostream &operator <<(std::ostream &os, const std::vector<Bound> &Bounds)

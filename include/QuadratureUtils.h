@@ -8,7 +8,7 @@ namespace FINITE_ELEMENT
 	class QuadratureUtils
 	{
 	public:
-		QuadratureUtils(FiniteElement *pE, unsigned const Order);
+		QuadratureUtils(FiniteElement, unsigned const);
 		
 		const Eigen::RowVectorXd &Weights() const;
 	

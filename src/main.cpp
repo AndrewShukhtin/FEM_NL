@@ -9,7 +9,6 @@
 
 int main(int argc, char *argv[])
 {
-
 	assert(argc > 1);
 	
 	Eigen::initParallel();
@@ -25,7 +24,6 @@ int main(int argc, char *argv[])
 		V(0) = -10.0; 
 		V(1) = 0.0;  
 		return V;
-		
 	};
 	
 	if (argc == 2)
@@ -56,8 +54,7 @@ int main(int argc, char *argv[])
 			return res;
 		};
 		
-				
-		
+
 		if(argc == 5)
 		{
 			int N = std::stoi(argv[2]);
@@ -159,6 +156,6 @@ int main(int argc, char *argv[])
 		}
 	
  	}
- 	
+
 	return 0;
 }

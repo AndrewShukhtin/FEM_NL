@@ -28,6 +28,7 @@ namespace FINITE_ELEMENT
 	void QuadratureUtils::SetQuadratureRule()
 	{
 		unsigned Dim = pE->Dimension();
+		unsigned NodesPerElement = pE->NodesPerElement();
 		
 		if(Dim == 1)
 		{	
@@ -88,7 +89,7 @@ namespace FINITE_ELEMENT
 					_Weights.resize(9); 
 					_QuadPoint.resize(9,2);
 					
-					if(pE->NodesPerElement() == 4)
+					if(NodesPerElement)
 					{	
 						
 						_Weights(0) = 25.0/81.0;

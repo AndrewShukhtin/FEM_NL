@@ -17,7 +17,9 @@ public:
 private:	
 	
 	void ConstructStiffMatr(std::vector<Triplet> &, std::vector<Eigen::MatrixXd> &, std::vector<Eigen::MatrixXd> &, Eigen::MatrixXd &, NdxArray &, JArray &, JacArray &);
+	
 	void ConstructStiffMatr(std::vector<Triplet> &, const std::vector<Eigen::MatrixXd> &, const std::vector<Eigen::MatrixXd> &, const Eigen::MatrixXd &, const NdxArray &, const JArray &, const JacArray &, const std::function<double(const double, const double)> &);
+	
 	void WriteToVTK(std::string _filename) override;
 	
 };

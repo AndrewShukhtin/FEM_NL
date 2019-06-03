@@ -28,6 +28,7 @@ namespace FINITE_ELEMENT
 	};	
 	
 	
+	//одномерный двухузловой элемент
 	class LinearElement: public FiniteElement
 	{
 	public:
@@ -36,9 +37,11 @@ namespace FINITE_ELEMENT
 		Eigen::RowVectorXd ShFunc(Eigen::MatrixXd &qp);
 		
 		Eigen::MatrixXd ShFuncGrad(Eigen::MatrixXd &qp);
-				
+		
 	};
 	
+	
+	//одномерный трехузловой элемент
 	class QuadraticElement: public FiniteElement
 	{
 	public:
@@ -51,7 +54,7 @@ namespace FINITE_ELEMENT
 	};
 	
 	
-	
+	//двумерный четырехузловой элемент
 	class BilinearElement: public FiniteElement
 	{
 	public:
@@ -63,6 +66,8 @@ namespace FINITE_ELEMENT
 				
 	};
 	
+	
+	//двумерный восьмиузловой элемент
 	class QuadraticSerendipElement: public FiniteElement
 	{
 	public:

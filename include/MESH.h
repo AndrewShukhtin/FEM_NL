@@ -21,7 +21,7 @@ namespace FINITE_ELEMENT
 	public:
 		MESH();
 		
-		void ReadMesh(const std::string filename);
+		void ReadMesh(const std::string);
 		
 		const std::string &FileName() const;
 		

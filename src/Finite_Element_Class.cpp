@@ -107,10 +107,11 @@ namespace FINITE_ELEMENT
 		
 		Eigen::MatrixXd NGradArr(2,8);
 		
-		NGradArr(0,0) = -0.5 * (1.0 - eta * eta); 	
+		NGradArr(0,0) = -0.5 * (1.0 - eta * eta);
 		NGradArr(0,1) = -1.0 * (1.0 - eta) * xi;
 		NGradArr(0,2) =  0.5 * (1.0 - eta * eta);
 		NGradArr(0,3) = -1.0 * (1.0 + eta) * xi;
+		
 		NGradArr(0,4) = -0.25 * (1.0 - eta) * (1.0 - xi) - 0.25 * (1.0 - eta) * (-1.0 - eta - xi);
 		NGradArr(0,5) =  0.25 * (1.0 - eta) * (1.0 + xi) + 0.25 * (1.0 - eta) * (-1.0 - eta + xi);
 		NGradArr(0,6) =  0.25 * (1.0 + eta) * (1.0 + xi) + 0.25 * (1.0 + eta) * (-1.0 + eta + xi);
@@ -120,8 +121,9 @@ namespace FINITE_ELEMENT
 		
 		NGradArr(1,0) = -1.0 * eta * (1.0 - xi);
 		NGradArr(1,1) = -0.5 * (1.0 - xi * xi);
-		NGradArr(1,2) = -1.0 * eta * (1.0 + xi);			
+		NGradArr(1,2) = -1.0 * eta * (1.0 + xi);
 		NGradArr(1,3) =  0.5 * (1.0 - xi * xi);
+		
 		NGradArr(1,4) = -0.25 * (1.0 - eta) * (1.0 - xi) - 0.25 * (1.0 - xi) * (-1.0 - eta - xi);
 		NGradArr(1,5) = -0.25 * (1.0 - eta) * (1.0 + xi) - 0.25 * (1.0 + xi) * (-1.0 - eta + xi);
 		NGradArr(1,6) =  0.25 * (1.0 + eta) * (1.0 + xi) + 0.25 * (1.0 + xi) * (-1.0 + eta + xi);

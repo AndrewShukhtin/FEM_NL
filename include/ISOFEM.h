@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <iomanip>
 
+// Да я использую двойные векторы чет было лень...
 using Triplet = Eigen::Triplet<double>;
 
 using NdxArray = std::vector<std::vector<Eigen::MatrixXd>>;
