@@ -1,4 +1,6 @@
-# Exclude everything expect directories include and src
+# Exclude everything expect main directories
 /*
 !include/
 !src/
+!bin/
+!obj/
